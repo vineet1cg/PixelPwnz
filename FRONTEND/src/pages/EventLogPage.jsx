@@ -4,6 +4,16 @@ import { motion, AnimatePresence } from 'motion/react'
 import { api } from '../lib/api.js'
 import BeforeAfterChart from '../components/BeforeAfterChart.jsx'
 import Loader from '../components/ui/Loader.jsx'
+import { Button } from '../components/ui/button.jsx'
+import { Input } from '../components/ui/input.jsx'
+import { Label } from '../components/ui/label.jsx'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select.jsx'
 import { useTimeMachine } from '../contexts/TimeMachineContext.jsx'
 
 /* ── Severity palette ─────────────────────────────── */
@@ -126,60 +136,64 @@ function EventLogPage() {
 
       {/* ── Toolbar (title in Navbar) ───────────────────── */}
       <header className="flex items-center justify-end border-b border-edge px-8 py-4">
-        <Link to="/dashboard" className="rounded-lg border border-edge bg-bg-raised px-3 py-1.5 text-xs text-text-muted transition-colors hover:border-bg-hover">
-          ← Dashboard
-        </Link>
+        <Button variant="outline" size="sm" asChild>
+          <Link to="/dashboard">← Dashboard</Link>
+        </Button>
       </header>
 
       <div className="px-8 py-6 flex flex-col gap-4">
 
         {/* ── Dataset + date filters ───────────── */}
         <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-end">
-          <label className="flex flex-col gap-1 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-            Dataset
-            <select
-              value={datasetFilter}
-              onChange={(e) => setDatasetFilter(e.target.value)}
-              className="rounded-lg border border-edge bg-bg-raised px-3 py-2 text-xs text-text-primary outline-none focus:border-bg-hover"
-            >
-              <option value="all">All datasets</option>
-              {datasetOptions.map((d) => (
-                <option key={d._id} value={d._id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-            From
-            <input
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="event-dataset">Dataset</Label>
+            <Select value={datasetFilter} onValueChange={setDatasetFilter}>
+              <SelectTrigger id="event-dataset" className="min-w-[220px]">
+                <SelectValue placeholder="All datasets" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All datasets</SelectItem>
+                {datasetOptions.map((d) => (
+                  <SelectItem key={d._id} value={String(d._id)}>
+                    {d.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="event-from">From</Label>
+            <Input
+              id="event-from"
               type="date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
-              className="rounded-lg border border-edge bg-bg-raised px-3 py-2 text-xs text-text-primary outline-none focus:border-bg-hover"
+              className="w-[11.5rem]"
             />
-          </label>
-          <label className="flex flex-col gap-1 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-            To
-            <input
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="event-to">To</Label>
+            <Input
+              id="event-to"
               type="date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
-              className="rounded-lg border border-edge bg-bg-raised px-3 py-2 text-xs text-text-primary outline-none focus:border-bg-hover"
+              className="w-[11.5rem]"
             />
-          </label>
+          </div>
           {(dateFrom || dateTo || datasetFilter !== 'all') && (
-            <button
+            <Button
               type="button"
+              variant="outline"
+              size="sm"
               onClick={() => {
                 setDateFrom('')
                 setDateTo('')
                 setDatasetFilter('all')
               }}
-              className="rounded-lg border border-edge px-3 py-2 text-xs text-text-muted transition-colors hover:border-bg-hover hover:text-text-primary"
             >
               Clear filters
-            </button>
+            </Button>
           )}
         </div>
 

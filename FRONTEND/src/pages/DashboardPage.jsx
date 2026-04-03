@@ -1,12 +1,21 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { motion, AnimatePresence } from 'motion/react'
+import { motion } from 'motion/react'
 import { api } from '../lib/api.js'
 
 import { useTimeMachine } from '../contexts/TimeMachineContext.jsx'
 import TimelineChart from '../components/charts/TimelineChart.jsx'
 import Loader from '../components/ui/Loader.jsx'
 import DatasetCard from '../components/ui/DatasetCard.jsx'
+import { ActivitiesCard } from '../components/ui/activities-card.jsx'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '../components/ui/card.jsx'
+import { Badge } from '../components/ui/badge.jsx'
 import { formatValueDisplay, timeAgoFromNow } from '../utils/format.js'
 
 const SEVEN_D_MS = 7 * 24 * 60 * 60 * 1000
@@ -36,7 +45,7 @@ const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.04 } } }
 /* ══════════════════════════════════════════════════ */
 function DashboardPage() {
   const navigate = useNavigate()
-  const { minTime, simulatedTime } = useTimeMachine()
+  const { minTime, maxTime, simulatedTime } = useTimeMachine()
   const [datasets, setDatasets] = useState([])
   const [allEvents, setAllEvents] = useState([])
   const [allSnaps, setAllSnaps] = useState({}) // id → snapshots up to simulatedTime
@@ -176,6 +185,19 @@ function DashboardPage() {
     critical: events.filter(e => e.severity === 'high').length,
   }), [datasets, events, categories])
 
+  const sevCounts = useMemo(() => {
+    const c = { high: 0, medium: 0, low: 0 }
+    events.forEach((e) => {
+      if (e.severity in c) c[e.severity] += 1
+    })
+    return c
+  }, [events])
+
+  const snapshotRows = useMemo(
+    () => Object.values(snapCache).reduce((n, s) => n + (s.count || 0), 0),
+    [snapCache],
+  )
+
   const activeAccent = activeDs ? (CAT[activeDs.category]?.accent || '#a78bfa') : '#f59e0b'
 
   if (loading) return <Loader label="Loading dashboard…" className="py-40" />
@@ -183,30 +205,105 @@ function DashboardPage() {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-0">
 
-      {/* ── Page intro (app title lives in Navbar) ───────────── */}
+      {/* ── Page intro + live activity (header rail) ───────────── */}
       <header className="border-b border-edge px-8 py-5">
-        <h1 className="text-lg font-bold tracking-tight">{getGreeting()}</h1>
-        <p className="mt-0.5 text-sm text-text-secondary">
-          Tracking <span className="font-mono text-text-primary">{stats.datasets}</span> datasets across {stats.categories} categories
-        </p>
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between lg:gap-10">
+          <div className="min-w-0">
+            <h1 className="text-lg font-bold tracking-tight">{getGreeting()}</h1>
+            <p className="mt-0.5 text-sm text-text-secondary">
+              Tracking <span className="font-mono text-text-primary">{stats.datasets}</span> datasets across {stats.categories} categories
+            </p>
+          </div>
+          <div className="w-full shrink-0 lg:max-w-md xl:max-w-lg">
+            <ActivitiesCard
+              headerIcon={<span className="text-lg">⚡</span>}
+              title="Recent activity"
+              subtitle={`${events.length} events in scrubber range`}
+              initialOpen={events.length > 0}
+              headerAction={(
+                <Link
+                  to="/events"
+                  className="rounded-lg border border-edge bg-bg-raised px-2.5 py-1.5 text-[11px] font-semibold text-text-secondary transition-colors hover:border-bg-hover hover:text-text-primary"
+                >
+                  View all →
+                </Link>
+              )}
+              activities={(events.slice(0, 8)).map((ev) => ({
+                icon: (
+                  <span className="text-base" aria-hidden>
+                    {ev.severity === 'high' ? '🔴' : ev.severity === 'medium' ? '🟡' : '🔵'}
+                  </span>
+                ),
+                title: ev.type ? String(ev.type).replaceAll('_', ' ') : 'Event',
+                desc: ev.message,
+                time: timeAgoFromNow(ev.timestamp),
+              }))}
+            />
+          </div>
+        </div>
       </header>
 
       <div className="px-8 py-6 flex flex-col gap-6">
 
-        {/* ── Summary Stats ────────────────────── */}
+        {/* ── KPI strip (Watermelon-style metric cards) ───────────── */}
         <motion.div variants={stagger} initial="hidden" animate="show" className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {[
-            { label: 'Total Datasets', val: stats.datasets, accent: '#f59e0b', icon: '📊' },
-            { label: 'Events Detected', val: stats.events, accent: '#fb7185', icon: '⚡' },
-            { label: 'Critical Alerts', val: stats.critical, accent: stats.critical > 0 ? '#fb7185' : '#34d399', icon: '🔴' },
-            { label: 'System Status',   val: 'Live', accent: '#34d399', icon: '🟢' },
-          ].map(s => (
-            <motion.div key={s.label} variants={pop} className="card px-4 py-3 flex items-center gap-3">
-              <span className="text-xl">{s.icon}</span>
-              <div>
-                <p className="text-xl font-bold tabular-nums" style={{ color: s.accent }}>{s.val}</p>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">{s.label}</p>
-              </div>
+            {
+              label: 'Datasets',
+              val: stats.datasets,
+              hint: `${filteredDatasets.length} in current filter`,
+              accent: '#f59e0b',
+              icon: '📊',
+            },
+            {
+              label: 'Events in range',
+              val: stats.events,
+              hint: `${snapshotRows.toLocaleString()} snapshot rows loaded`,
+              accent: '#fb7185',
+              icon: '⚡',
+            },
+            {
+              label: 'Critical',
+              val: stats.critical,
+              hint:
+                stats.events > 0
+                  ? `${((stats.critical / stats.events) * 100).toFixed(0)}% of events`
+                  : 'No events in range',
+              accent: stats.critical > 0 ? '#fb7185' : '#34d399',
+              icon: '🔴',
+            },
+            {
+              label: 'Pipeline',
+              val: 'Live',
+              hint: 'Scrubber + API',
+              accent: '#34d399',
+              icon: '🟢',
+              badge: true,
+            },
+          ].map((s) => (
+            <motion.div key={s.label} variants={pop}>
+              <Card className="h-full gap-0 border-edge bg-bg-overlay/80 py-4 shadow-none backdrop-blur-sm">
+                <CardHeader className="gap-1 px-4 pb-2 pt-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-lg opacity-90" aria-hidden>{s.icon}</span>
+                    {s.badge ? (
+                      <Badge className="border-emerald-500/30 bg-emerald-500/15 text-emerald-400">Live</Badge>
+                    ) : null}
+                  </div>
+                  <CardDescription className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                    {s.label}
+                  </CardDescription>
+                  <CardTitle
+                    className="font-mono text-2xl font-bold tabular-nums text-text-primary"
+                    style={{ color: s.badge ? undefined : s.accent }}
+                  >
+                    {s.val}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-1 pt-0">
+                  <p className="text-[11px] leading-snug text-text-muted">{s.hint}</p>
+                </CardContent>
+              </Card>
             </motion.div>
           ))}
         </motion.div>
@@ -270,129 +367,178 @@ function DashboardPage() {
           </div>
         )}
 
-        {/* ── Bento: Dataset Grid + Chart + Activity */}
+        {/* ── Main analytics grid (Watermelon-style: chart + insights rail, then table) ── */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-
-          {/* ─ Dataset Table (8 cols) ──────────── */}
-          <motion.div variants={pop} initial="hidden" animate="show" className="card flex flex-col lg:col-span-8 max-h-[440px]">
-            <div className="flex items-center justify-between border-b border-edge px-5 py-3">
-              <span className="text-sm font-semibold">Datasets</span>
-              <span className="text-xs text-text-muted">{filteredDatasets.length} tracked</span>
-            </div>
-            {/* Table header */}
-            <div className="grid grid-cols-12 gap-2 border-b border-edge-subtle px-5 py-2 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-              <span className="col-span-4">Name</span>
-              <span className="col-span-2">Category</span>
-              <span className="col-span-2 text-right">Value</span>
-              <span className="col-span-2 text-right">Change</span>
-              <span className="col-span-2 text-right">Updated</span>
-            </div>
-            <div className="flex-1 overflow-y-auto divide-y divide-edge-subtle">
-              {filteredDatasets.map(ds => {
-                const cat = CAT[ds.category] || { label: ds.category, accent: '#a78bfa', icon: '•' }
-                const snap = snapCache[ds._id]
-                const isActive = activeDs?._id === ds._id
-                return (
-                  <div
-                    key={ds._id}
-                    onClick={() => setActiveDs(ds)}
-                    className={`grid grid-cols-12 gap-2 px-5 py-2.5 cursor-pointer items-center text-sm transition-colors ${isActive ? 'bg-bg-hover/60' : 'hover:bg-bg-hover/30'}`}
-                  >
-                    <Link to={`/dataset/${ds._id}`} className="col-span-4 flex items-center gap-2 min-w-0" onClick={e => e.stopPropagation()}>
-                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: cat.accent }} />
-                      <span className="truncate text-xs font-semibold text-text-primary hover:underline">{ds.name}</span>
-                    </Link>
-                    <span className="col-span-2">
-                      <span className="rounded-full px-2 py-0.5 text-[9px] font-bold" style={{ background: `${cat.accent}12`, color: cat.accent }}>
-                        {cat.label}
-                      </span>
-                    </span>
-                    <span className="col-span-2 text-right font-mono text-xs text-text-secondary">
-                      {snap ? formatValueDisplay(snap.value, ds.unit) : '—'}
-                    </span>
-                    <span className="col-span-2 text-right font-mono text-xs font-bold" style={{ color: snap ? (snap.pct >= 0 ? '#34d399' : '#fb7185') : '#52525b' }}>
-                      {snap ? `${snap.pct >= 0 ? '+' : ''}${snap.pct.toFixed(2)}%` : '—'}
-                    </span>
-                    <span className="col-span-2 text-right text-[10px] text-text-muted">
-                      {snap?.ts ? timeAgoFromNow(snap.ts) : '—'}
-                    </span>
+          {/* ─ Chart (primary — like ERP / e‑commerce hero charts) ─ */}
+          <motion.div variants={pop} initial="hidden" animate="show" className="flex flex-col lg:col-span-8">
+            <Card className="max-h-full gap-0 border-edge bg-bg-overlay/80 py-0 shadow-none backdrop-blur-sm">
+              <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 border-b border-edge px-5 py-3">
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: activeAccent }} />
+                  <div className="min-w-0">
+                    <CardTitle className="truncate text-sm font-semibold text-text-primary">
+                      {activeDs?.name ?? 'Select a dataset'}
+                    </CardTitle>
+                    <CardDescription className="text-xs text-text-muted">
+                      {chartData.length} points · event markers → event log
+                    </CardDescription>
                   </div>
-                )
-              })}
-            </div>
-          </motion.div>
-
-          {/* ─ Activity Feed (4 cols) ──────────── */}
-          <motion.div variants={pop} initial="hidden" animate="show" className="card flex flex-col lg:col-span-4 max-h-[440px]">
-            <div className="flex items-center justify-between border-b border-edge px-5 py-3">
-              <span className="text-sm font-semibold">Activity</span>
-              <Link to="/events" className="rounded-full bg-rose-soft px-2 py-0.5 text-[10px] font-bold tabular-nums text-rose">{events.length}</Link>
-            </div>
-            <div className="flex-1 flex flex-col divide-y divide-edge-subtle overflow-y-auto">
-              {events.length === 0 && (
-                <div className="flex flex-1 items-center justify-center py-8 text-sm text-text-muted">No events yet</div>
-              )}
-              {events.map((ev, i) => (
-                <motion.div
-                  key={ev._id}
-                  initial={{ opacity: 0, x: 8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.1 + i * 0.04 }}
-                  className="flex items-start gap-3 px-5 py-3 transition-colors hover:bg-bg-hover/50"
-                >
-                  <span
-                    className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full"
-                    style={{ background: SEV_COLOR[ev.severity] || '#52525b', boxShadow: `0 0 6px ${SEV_COLOR[ev.severity] || '#52525b'}50` }}
+                </div>
+                {activeDs && (
+                  <Link
+                    to={`/dataset/${activeDs._id}`}
+                    className="shrink-0 text-xs font-semibold transition-colors hover:underline"
+                    style={{ color: activeAccent }}
+                  >
+                    View details →
+                  </Link>
+                )}
+              </CardHeader>
+              <CardContent className="p-4" style={{ minHeight: 260 }}>
+                {chartData.length > 0 ? (
+                  <TimelineChart
+                    data={chartData}
+                    accent={activeAccent}
+                    height={260}
+                    events={chartEvents}
+                    gradientId="dashMainGrad"
+                    onEventClick={() => navigate('/events')}
                   />
-                  <div className="flex-1 min-w-0">
-                    <p className="truncate text-xs text-text-primary">{ev.message}</p>
-                    <p className="mt-0.5 text-[10px] text-text-muted">{timeAgoFromNow(ev.timestamp)}</p>
+                ) : (
+                  <div className="flex h-[260px] items-center justify-center text-sm text-text-muted">
+                    No snapshot data in this range
                   </div>
-                </motion.div>
-              ))}
-            </div>
+                )}
+              </CardContent>
+            </Card>
           </motion.div>
 
-          {/* ─ Chart Panel (full width) ─────────── */}
-          <motion.div variants={pop} initial="hidden" animate="show" className="card flex flex-col lg:col-span-12">
-            <div className="flex items-center justify-between border-b border-edge px-5 py-3">
-              <div className="flex items-center gap-3">
-                <span className="h-2.5 w-2.5 rounded-full" style={{ background: activeAccent }} />
-                <AnimatePresence mode="wait">
-                  <motion.span
-                    key={activeDs?.name}
-                    initial={{ opacity: 0, y: -6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 6 }}
-                    className="text-sm font-semibold"
-                  >
-                    {activeDs?.name ?? 'Select a dataset'}
-                  </motion.span>
-                </AnimatePresence>
-                <span className="text-xs text-text-muted">
-                  — {chartData.length} pts · markers = events (click → log)
-                </span>
+          {/* ─ Insights rail (time window + severity — like payment/ops side panels) ─ */}
+          <motion.div variants={pop} initial="hidden" animate="show" className="flex flex-col gap-4 lg:col-span-4">
+            <Card className="gap-0 border-edge bg-bg-overlay/80 py-0 shadow-none backdrop-blur-sm">
+              <CardHeader className="border-b border-edge px-4 py-3">
+                <CardTitle className="text-sm font-semibold text-text-primary">Scrubber window</CardTitle>
+                <CardDescription className="text-xs text-text-muted">
+                  Data bounds · move the timeline to explore
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3 px-4 py-4">
+                <div className="rounded-lg border border-edge-subtle bg-bg-raised/60 px-3 py-2 text-[11px] text-text-secondary">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Range</span>
+                  <p className="mt-1 font-mono text-xs text-text-primary">
+                    {new Date(minTime).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    {' — '}
+                    {new Date(maxTime).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-amber/20 bg-amber/5 px-3 py-2">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Simulated</span>
+                  <p className="mt-1 font-mono text-sm font-bold text-amber">
+                    {new Date(simulatedTime).toLocaleString()}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="gap-0 border-edge bg-bg-overlay/80 py-0 shadow-none backdrop-blur-sm">
+              <CardHeader className="border-b border-edge px-4 py-3">
+                <CardTitle className="text-sm font-semibold text-text-primary">Event mix</CardTitle>
+                <CardDescription className="text-xs text-text-muted">By severity (in scrubber range)</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3 px-4 py-4">
+                {events.length === 0 ? (
+                  <p className="text-[13px] text-text-muted">No events yet</p>
+                ) : (
+                  ['high', 'medium', 'low'].map((key) => {
+                    const count = sevCounts[key]
+                    const pct = events.length ? (count / events.length) * 100 : 0
+                    const color = SEV_COLOR[key]
+                    return (
+                      <div key={key}>
+                        <div className="flex items-center justify-between text-[11px] text-text-muted">
+                          <span className="capitalize">{key}</span>
+                          <span className="font-mono tabular-nums text-text-secondary">{count}</span>
+                        </div>
+                        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-bg-raised">
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{ width: `${pct}%`, background: color, boxShadow: `0 0 6px ${color}40` }}
+                          />
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* ─ Dataset table (full width — like ERP “All employees”) ─ */}
+          <motion.div variants={pop} initial="hidden" animate="show" className="flex flex-col lg:col-span-12">
+            <Card className="max-h-[min(52vh,480px)] gap-0 border-edge bg-bg-overlay/80 py-0 shadow-none backdrop-blur-sm">
+              <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 border-b border-edge px-5 py-3">
+                <div>
+                  <CardTitle className="text-sm font-semibold text-text-primary">Datasets</CardTitle>
+                  <CardDescription className="text-xs text-text-muted">
+                    {filteredDatasets.length} tracked · click row to focus chart
+                  </CardDescription>
+                </div>
+                <Badge variant="outline" className="border-edge text-text-muted">
+                  Table
+                </Badge>
+              </CardHeader>
+              <div className="grid grid-cols-12 gap-2 border-b border-edge-subtle px-5 py-2 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                <span className="col-span-4">Name</span>
+                <span className="col-span-2">Category</span>
+                <span className="col-span-2 text-right">Value</span>
+                <span className="col-span-2 text-right">Change</span>
+                <span className="col-span-2 text-right">Updated</span>
               </div>
-              {activeDs && (
-                <Link to={`/dataset/${activeDs._id}`} className="text-xs font-semibold transition-colors hover:underline" style={{ color: activeAccent }}>
-                  View details →
-                </Link>
-              )}
-            </div>
-            <div className="flex-1 p-4" style={{ minHeight: 240 }}>
-              {chartData.length > 0 ? (
-                <TimelineChart
-                  data={chartData}
-                  accent={activeAccent}
-                  height={240}
-                  events={chartEvents}
-                  gradientId="dashMainGrad"
-                  onEventClick={() => navigate('/events')}
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center text-sm text-text-muted">No snapshot data in this range</div>
-              )}
-            </div>
+              <div className="flex-1 overflow-y-auto divide-y divide-edge-subtle">
+                {filteredDatasets.map((ds) => {
+                  const cat = CAT[ds.category] || { label: ds.category, accent: '#a78bfa', icon: '•' }
+                  const snap = snapCache[ds._id]
+                  const isActive = activeDs?._id === ds._id
+                  return (
+                    <div
+                      key={ds._id}
+                      onClick={() => setActiveDs(ds)}
+                      className={`grid grid-cols-12 gap-2 px-5 py-2.5 cursor-pointer items-center text-sm transition-colors ${isActive ? 'bg-bg-hover/60' : 'hover:bg-bg-hover/30'}`}
+                    >
+                      <Link
+                        to={`/dataset/${ds._id}`}
+                        className="col-span-4 flex items-center gap-2 min-w-0"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: cat.accent }} />
+                        <span className="truncate text-xs font-semibold text-text-primary hover:underline">{ds.name}</span>
+                      </Link>
+                      <span className="col-span-2">
+                        <Badge
+                          variant="secondary"
+                          className="border-0 px-2 py-0.5 text-[9px] font-bold"
+                          style={{ background: `${cat.accent}18`, color: cat.accent }}
+                        >
+                          {cat.label}
+                        </Badge>
+                      </span>
+                      <span className="col-span-2 text-right font-mono text-xs text-text-secondary">
+                        {snap ? formatValueDisplay(snap.value, ds.unit) : '—'}
+                      </span>
+                      <span
+                        className="col-span-2 text-right font-mono text-xs font-bold"
+                        style={{ color: snap ? (snap.pct >= 0 ? '#34d399' : '#fb7185') : '#52525b' }}
+                      >
+                        {snap ? `${snap.pct >= 0 ? '+' : ''}${snap.pct.toFixed(2)}%` : '—'}
+                      </span>
+                      <span className="col-span-2 text-right text-[10px] text-text-muted">
+                        {snap?.ts ? timeAgoFromNow(snap.ts) : '—'}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </Card>
           </motion.div>
         </div>
       </div>
