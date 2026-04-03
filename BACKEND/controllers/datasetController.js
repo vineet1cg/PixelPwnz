@@ -1,5 +1,5 @@
 const Dataset = require('../models/Dataset');
-const { fetchBitcoin, fetchDelhiAQI, fetchMumbaiWeather } = require('../services/fetcher');
+const { fetchSingleDataset } = require('../services/fetcher');
 
 const getDatasets = async (req, res) => {
     try {
@@ -23,22 +23,11 @@ const fetchNow = async (req, res) => {
     try {
         const dataset = await Dataset.findById(req.params.id);
         if (!dataset) return res.status(404).json({ error: 'Dataset not found' });
-        
-        let fetched = false;
-        
-        if (dataset.name === 'bitcoin') {
-            await fetchBitcoin();
-            fetched = true;
-        } else if (dataset.name === 'pm25-delhi') {
-            await fetchDelhiAQI();
-            fetched = true;
-        } else if (dataset.name === 'mumbai-temp') {
-            await fetchMumbaiWeather();
-            fetched = true;
-        }
-        
-        if(fetched) {
-            res.json({ message: 'Manual fetch completed for ' + dataset.name });
+
+        const fetched = await fetchSingleDataset(dataset.name);
+
+        if (fetched) {
+            res.json({ message: `Manual fetch completed for ${dataset.name}` });
         } else {
             res.status(400).json({ error: 'No fetcher available for this dataset' });
         }
