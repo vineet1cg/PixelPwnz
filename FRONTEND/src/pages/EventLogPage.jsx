@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'motion/react'
 import { api } from '../lib/api.js'
+import BeforeAfterChart from '../components/BeforeAfterChart.jsx'
 
 /* ── Severity palette ─────────────────────────────── */
 const SEV = {
@@ -248,6 +249,12 @@ function EventLogPage() {
                               </div>
                             </div>
                           )}
+
+                          {/* Mini Context Chart */}
+                          <div className="card-flat px-3 py-2 mt-1">
+                            <span className="flex items-center gap-2 text-[10px] uppercase text-text-muted">Event Context <span className="opacity-50">(±5 points)</span></span>
+                            <BeforeAfterChart datasetId={ev.dataset_id} eventTime={ev.timestamp} color={sev.color} />
+                          </div>
 
                           {/* AI Explanation */}
                           <div className="card-flat px-3 py-2">
