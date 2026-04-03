@@ -1,4 +1,5 @@
 const Event = require('../models/Event');
+const { generateEventExplanation } = require('../services/aiService');
 
 const getAllEvents = async (req, res) => {
     try {
@@ -18,4 +19,16 @@ const getEventsForDataset = async (req, res) => {
     }
 };
 
-module.exports = { getAllEvents, getEventsForDataset };
+const explainEvent = async (req, res) => {
+    try {
+        const event = await Event.findById(req.params.id);
+        if (!event) return res.status(404).json({ error: 'Event not found' });
+        
+        const explanation = await generateEventExplanation(event);
+        res.json({ explanation });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+module.exports = { getAllEvents, getEventsForDataset, explainEvent };

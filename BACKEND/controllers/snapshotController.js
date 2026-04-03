@@ -18,4 +18,20 @@ const getSnapshotsForDataset = async (req, res) => {
     }
 };
 
-module.exports = { getSnapshotsForDataset };
+const exportSnapshotsCSV = async (req, res) => {
+    try {
+        const snapshots = await Snapshot.find({ dataset_id: req.params.id }).sort({ timestamp: -1 });
+        let csv = 'timestamp,value\n';
+        snapshots.forEach(s => {
+            csv += `${s.timestamp.toISOString()},${s.value}\n`;
+        });
+        
+        res.header('Content-Type', 'text/csv');
+        res.attachment(`dataset_${req.params.id}_snapshots.csv`);
+        res.send(csv);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+module.exports = { getSnapshotsForDataset, exportSnapshotsCSV };
