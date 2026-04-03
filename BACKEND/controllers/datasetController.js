@@ -26,13 +26,13 @@ const fetchNow = async (req, res) => {
         
         let fetched = false;
         
-        if (dataset.name.includes('Bitcoin')) {
+        if (dataset.name === 'bitcoin') {
             await fetchBitcoin();
             fetched = true;
-        } else if (dataset.name.includes('Delhi AQI')) {
+        } else if (dataset.name === 'pm25-delhi') {
             await fetchDelhiAQI();
             fetched = true;
-        } else if (dataset.name.includes('Mumbai')) {
+        } else if (dataset.name === 'mumbai-temp') {
             await fetchMumbaiWeather();
             fetched = true;
         }

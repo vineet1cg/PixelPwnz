@@ -11,7 +11,7 @@ const getSnapshotsForDataset = async (req, res) => {
     }
 
     try {
-        const snapshots = await Snapshot.find(query).sort({ timestamp: -1 });
+        const snapshots = await Snapshot.find(query).sort({ timestamp: 1 });
         res.json(snapshots);
     } catch (error) {
         res.status(500).json({ error: error.message });

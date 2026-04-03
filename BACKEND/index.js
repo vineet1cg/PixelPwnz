@@ -12,7 +12,7 @@ const app = express();
 connectDB();
 
 // Middleware
-app.use(cors());
+app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:3000' }));
 app.use(express.json());
 
 // Health Check Route
@@ -20,10 +20,11 @@ app.get('/health', (req, res) => {
     res.status(200).json({ status: 'Server is healthy', timestamp: new Date() });
 });
 
-// API Routes
-app.use('/api/datasets', require('./routes/datasets'));
-app.use('/api/datasets', require('./routes/snapshots'));
-app.use('/api', require('./routes/events'));
+// API Routes (PRD endpoints)
+app.use('/api/datasets', require('./routes/datasets'));       // GET /api/datasets, POST /api/datasets
+app.use('/api/datasets', require('./routes/snapshots'));       // GET /api/datasets/:id/snapshots, GET /api/datasets/:id/export
+app.use('/api', require('./routes/events'));                   // GET /api/events, GET /api/datasets/:id/events, GET /api/events/:id/explain
+app.use('/api/fetch-now', require('./routes/fetchNow'));       // POST /api/fetch-now/:id
 
 // Global Error Handler
 app.use(errorHandler);
