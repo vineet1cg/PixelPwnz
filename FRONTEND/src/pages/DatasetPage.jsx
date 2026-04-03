@@ -58,6 +58,8 @@ function DatasetPage() {
   const [events, setEvents] = useState([])
   const [loading, setLoading] = useState(true)
   const [fetchingNow, setFetchingNow] = useState(false)
+  const [scrubIndex, setScrubIndex] = useState(-1)
+  const [isPlaying, setIsPlaying] = useState(false)
 
   // Fetch dataset info, snapshots, and events
   useEffect(() => {
@@ -71,6 +73,7 @@ function DatasetPage() {
         const ds = allDs.find(d => d._id === id)
         setDataset(ds || null)
         setSnapshots(snaps)
+        setScrubIndex(snaps.length - 1)
         setEvents(evs.slice(0, 10))
         setLoading(false)
       } catch (err) {
@@ -92,6 +95,7 @@ function DatasetPage() {
         api.getDatasetEvents(id),
       ])
       setSnapshots(snaps)
+      setScrubIndex(snaps.length - 1)
       setEvents(evs.slice(0, 10))
     } catch (err) {
       console.error('Manual fetch failed:', err)
@@ -99,21 +103,44 @@ function DatasetPage() {
     setFetchingNow(false)
   }
 
+  // Auto-play effect
+  useEffect(() => {
+    if (!isPlaying) return
+    const interval = setInterval(() => {
+      setScrubIndex(prev => {
+        if (prev >= snapshots.length - 1) {
+          setIsPlaying(false) // pause at end
+          return prev
+        }
+        return prev + 1
+      })
+    }, 250) // Fast 250ms interval for nice demo replay
+    return () => clearInterval(interval)
+  }, [isPlaying, snapshots.length])
+
+  // Sliced data based on scrubber
+  const slicedSnapshots = useMemo(() => {
+    if (scrubIndex === -1 || snapshots.length === 0) return snapshots
+    return snapshots.slice(0, Math.min(scrubIndex + 1, snapshots.length))
+  }, [snapshots, scrubIndex])
+
+  const cutoffDate = slicedSnapshots.length > 0 ? new Date(slicedSnapshots[slicedSnapshots.length - 1].timestamp) : new Date()
+
   // Chart data
   const timelineData = useMemo(() => {
-    return snapshots.map(s => ({
+    return slicedSnapshots.map(s => ({
       label: new Date(s.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       value: s.value,
     }))
-  }, [snapshots])
+  }, [slicedSnapshots])
 
   // Distribution data (histogram of values)
   const distData = useMemo(() => {
-    if (snapshots.length < 2) return []
-    const values = snapshots.map(s => s.value)
+    if (slicedSnapshots.length < 2) return []
+    const values = slicedSnapshots.map(s => s.value)
     const min = Math.min(...values)
     const max = Math.max(...values)
-    const bucketCount = Math.min(12, Math.max(4, Math.floor(snapshots.length / 5)))
+    const bucketCount = Math.min(12, Math.max(4, Math.floor(slicedSnapshots.length / 5)))
     const step = (max - min) / bucketCount || 1
     const buckets = Array(bucketCount).fill(0)
     values.forEach(v => {
@@ -124,17 +151,20 @@ function DatasetPage() {
       range: `${(min + i * step).toFixed(0)}`,
       count
     }))
-  }, [snapshots])
+  }, [slicedSnapshots])
 
-  // Stats computed from snapshots
+  // Stats computed from sliced snapshots
   const stats = useMemo(() => {
-    if (snapshots.length === 0) return { current: '—', change: 0, total: 0, anomalies: 0 }
-    const latest = snapshots[snapshots.length - 1]
-    const prev = snapshots.length > 1 ? snapshots[snapshots.length - 2] : latest
+    if (slicedSnapshots.length === 0) return { current: '—', change: 0, total: 0, anomalies: 0 }
+    const latest = slicedSnapshots[slicedSnapshots.length - 1]
+    const prev = slicedSnapshots.length > 1 ? slicedSnapshots[slicedSnapshots.length - 2] : latest
     const pct = prev.value !== 0 ? ((latest.value - prev.value) / prev.value) * 100 : 0
-    const anomalies = events.filter(ev => ev.severity === 'high').length
-    return { current: latest.value, change: pct, total: snapshots.length, anomalies }
-  }, [snapshots, events])
+
+    // Filter anomalies up to the cutoff date
+    const anomalies = events.filter(ev => ev.severity === 'high' && new Date(ev.timestamp) <= cutoffDate).length
+
+    return { current: latest.value, change: pct, total: slicedSnapshots.length, anomalies }
+  }, [slicedSnapshots, events, cutoffDate])
 
   const accent = dataset ? (ACCENT[dataset.category] || '#a78bfa') : '#a78bfa'
 
@@ -237,6 +267,51 @@ function DatasetPage() {
               ) : (
                 <div className="flex h-full items-center justify-center text-sm text-text-muted">No snapshot data yet — use Fetch Now</div>
               )}
+            </div>
+
+            {/* Scrubber */}
+            <div className="border-t border-edge bg-bg-raised/30 px-5 py-4 flex items-center gap-4">
+              <button
+                onClick={() => setIsPlaying(p => !p)}
+                disabled={snapshots.length < 2}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-text-base text-bg-base hover:bg-text-muted transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {isPlaying ? (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                ) : (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                )}
+              </button>
+              <div className="flex-1 flex flex-col gap-2">
+                <div className="flex justify-between items-center text-[10px] text-text-muted font-mono uppercase tracking-wider">
+                  <span>{snapshots.length > 0 ? new Date(snapshots[0].timestamp).toLocaleDateString() : 'Start'}</span>
+                  <span className="font-bold px-2 py-0.5 rounded-md bg-bg-hover" style={{ color: accent }}>
+                    {slicedSnapshots.length > 0 ? new Date(slicedSnapshots[slicedSnapshots.length - 1].timestamp).toLocaleString() : 'Now'}
+                  </span>
+                  <span>{snapshots.length > 0 ? new Date(snapshots[snapshots.length - 1].timestamp).toLocaleDateString() : 'End'}</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={Math.max(0, snapshots.length - 1)}
+                  value={scrubIndex === -1 ? Math.max(0, snapshots.length - 1) : scrubIndex}
+                  onChange={(e) => {
+                    setIsPlaying(false)
+                    setScrubIndex(Number(e.target.value))
+                  }}
+                  className="w-full h-1.5 appearance-none rounded-full bg-edge outline-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:border-none [&::-moz-range-thumb]:cursor-pointer hover:[&::-webkit-slider-thumb]:scale-110 transition-all cursor-pointer"
+                  style={{ 
+                    '--ds-accent': accent,
+                    backgroundImage: `linear-gradient(${accent}, ${accent})`,
+                    backgroundSize: `${snapshots.length > 1 ? ((scrubIndex === -1 ? snapshots.length - 1 : scrubIndex) / (snapshots.length - 1)) * 100 : 0}% 100%`,
+                    backgroundRepeat: 'no-repeat'
+                  }}
+                />
+                <style dangerouslySetInnerHTML={{__html:`
+                  input[type=range]::-webkit-slider-thumb { background: var(--ds-accent); }
+                  input[type=range]::-moz-range-thumb { background: var(--ds-accent); }
+                `}} />
+              </div>
             </div>
           </motion.div>
 

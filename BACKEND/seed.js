@@ -106,8 +106,17 @@ const seedData = async () => {
         dogecoin:    { index: 30, value: 0.247, message: 'Dogecoin spiked +45% — viral social media pump' }
     };
     for (const c of CRYPTOS) {
-        const ds = await Dataset.create({ name: `crypto-${c.id}`, category: 'crypto', source_api: 'coingecko', location: 'global', unit: 'USD', fetch_interval_minutes: 5 });
-        await generateSnapshots(ds, c.base, c.min, c.max, cryptoSpikes[c.id] || null);
+        // Convert USD dummy values to INR
+        const inrBase = c.base * 84;
+        const inrMin = c.min * 84;
+        const inrMax = c.max * 84;
+        
+        // Clone spike and convert to INR
+        let spike = cryptoSpikes[c.id] ? { ...cryptoSpikes[c.id] } : null;
+        if (spike) spike.value = spike.value * 84;
+
+        const ds = await Dataset.create({ name: `crypto-${c.id}`, category: 'crypto', source_api: 'coingecko', location: 'India', unit: 'INR', fetch_interval_minutes: 5 });
+        await generateSnapshots(ds, inrBase, inrMin, inrMax, spike);
         console.log(`  ✅ ${c.name}`);
     }
 
