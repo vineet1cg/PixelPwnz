@@ -78,6 +78,12 @@ const saveSnapshot = async (datasetName, category, sourceApi, location, unit, va
             unit,
             fetch_interval_minutes: 10
         });
+    } else {
+        // Update unit and location if they changed
+        let updated = false;
+        if (dataset.unit !== unit) { dataset.unit = unit; updated = true; }
+        if (dataset.location !== location) { dataset.location = location; updated = true; }
+        if (updated) await dataset.save();
     }
 
     const snapshot = await Snapshot.create({
@@ -100,16 +106,27 @@ const fetchAllCrypto = async () => {
         const ids = CRYPTOS.map(c => c.id).join(',');
         const response = await axios.get(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=inr,usd`);
 
+        let inrPerUsd = 83.5;
+        try {
+            const usdDataset = await Dataset.findOne({ name: 'forex-inr-usd' });
+            if (usdDataset) {
+                const latestSnap = await Snapshot.findOne({ dataset_id: usdDataset._id }).sort({ timestamp: -1 });
+                if (latestSnap && latestSnap.value) inrPerUsd = 1 / latestSnap.value;
+            }
+        } catch (e) {
+            console.error('Error fetching forex rate:', e.message);
+        }
+
         for (const crypto of CRYPTOS) {
             const priceUSD = response.data[crypto.id]?.usd;
-            const priceINR = response.data[crypto.id]?.inr;
             if (priceUSD !== undefined) {
+                const computedINR = priceUSD * inrPerUsd;
                 await saveSnapshot(
                     `crypto-${crypto.id}`, 'crypto', 'coingecko', 'India', 'INR',
-                    priceINR || priceUSD,
-                    { symbol: crypto.symbol, usd: priceUSD, inr: priceINR }
+                    computedINR,
+                    { symbol: crypto.symbol, usd: priceUSD, inr: computedINR }
                 );
-                console.log(`  ✅ ${crypto.name}: ₹${priceINR} ($${priceUSD})`);
+                console.log(`  ✅ ${crypto.name}: ₹${computedINR} ($${priceUSD})`);
             }
         }
     } catch (error) {
@@ -223,9 +240,21 @@ const fetchSingleDataset = async (datasetName) => {
     const cryptoMatch = CRYPTOS.find(c => `crypto-${c.id}` === datasetName);
     if (cryptoMatch) {
         const response = await axios.get(`https://api.coingecko.com/api/v3/simple/price?ids=${cryptoMatch.id}&vs_currencies=inr,usd`);
-        const priceINR = response.data[cryptoMatch.id]?.inr;
         const priceUSD = response.data[cryptoMatch.id]?.usd;
-        if (priceINR) await saveSnapshot(`crypto-${cryptoMatch.id}`, 'crypto', 'coingecko', 'India', 'INR', priceINR, { symbol: cryptoMatch.symbol, usd: priceUSD, inr: priceINR });
+        
+        let inrPerUsd = 83.5;
+        try {
+            const usdDataset = await Dataset.findOne({ name: 'forex-inr-usd' });
+            if (usdDataset) {
+                const latestSnap = await Snapshot.findOne({ dataset_id: usdDataset._id }).sort({ timestamp: -1 });
+                if (latestSnap && latestSnap.value) inrPerUsd = 1 / latestSnap.value;
+            }
+        } catch (e) {}
+
+        if (priceUSD !== undefined) {
+            const computedINR = priceUSD * inrPerUsd;
+            await saveSnapshot(`crypto-${cryptoMatch.id}`, 'crypto', 'coingecko', 'India', 'INR', computedINR, { symbol: cryptoMatch.symbol, usd: priceUSD, inr: computedINR });
+        }
         return true;
     }
 

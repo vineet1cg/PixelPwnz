@@ -25,6 +25,7 @@ const COORDS = {
   'pune':      { lat: 18.5204, lon: 73.8567 },
   'jaipur':    { lat: 26.9124, lon: 75.7873 },
   'lucknow':   { lat: 26.8467, lon: 80.9462 },
+  'india':     { lat: 20.5937, lon: 78.9629 },
   'new york':  { lat: 40.7128, lon: -74.0060 },
   'new-york':  { lat: 40.7128, lon: -74.0060 },
   'london':    { lat: 51.5074, lon: -0.1278 },
@@ -42,6 +43,8 @@ const COORDS = {
 function formatValue(v, unit) {
   if (v == null) return '—'
   if (unit === 'USD') return `$${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+  if (unit === 'INR') return `₹${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+  if (['EUR', 'GBP', 'JPY', 'AUD', 'USDC'].includes(unit)) return `${Number(v).toFixed(4)} ${unit}`
   return `${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${unit}`
 }
 
@@ -103,7 +106,6 @@ function MapPage() {
   // Datasets that have geo coordinates
   const geoDatasets = useMemo(() => {
     return datasets.filter(ds => {
-      if (ds.category === 'crypto' || ds.category === 'forex') return false
       const loc = ds.location?.toLowerCase().replace(/, india$/i, '').trim()
       return loc && COORDS[loc]
     }).map(ds => {
@@ -200,9 +202,7 @@ function MapPage() {
         })}
 
         <div className="ml-auto flex items-center gap-2 text-[10px] text-text-muted">
-          {Object.entries(CAT)
-            .filter(([k]) => k !== 'crypto' && k !== 'forex')
-            .map(([k, cfg]) => (
+          {Object.entries(CAT).map(([k, cfg]) => (
               <span key={k} className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full" style={{ background: cfg.accent }} />
                 {cfg.label}
@@ -287,12 +287,12 @@ function MapPage() {
                           Updated {timeAgo(snap.ts)} • {snap.count} snapshots
                         </div>
                       )}
-                      <a
-                        href={`/dataset/${ds._id}`}
+                      <Link
+                        to={`/dataset/${ds._id}`}
                         style={{ display:'inline-block', marginTop: 8, fontSize: 11, color: cat.accent, textDecoration: 'none', fontWeight: 600 }}
                       >
                         View Details →
-                      </a>
+                      </Link>
                     </div>
                   </Popup>
                 </CircleMarker>

@@ -1,11 +1,11 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, Link } from 'react-router-dom'
 import { motion } from 'motion/react'
 
 const NAV = [
   { to: '/dashboard', label: 'Dashboard', icon: (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>
   )},
-  { to: '/events', label: 'Events', badge: 3, icon: (
+  { to: '/events', label: 'Events', icon: (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
   )},
   { to: '/map', label: 'Map', icon: (
@@ -17,20 +17,22 @@ function Sidebar() {
   return (
     <aside className="flex w-16 shrink-0 flex-col items-center border-r border-edge bg-bg-base py-4 gap-6">
       {/* Logo */}
-      <motion.div
-        whileHover={{ scale: 1.1 }}
-        className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-amber to-rose cursor-pointer"
-        style={{ boxShadow: '0 0 16px rgba(245,158,11,0.25)' }}
-      >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="10"/>
-          <polyline points="12 6 12 12 16 14"/>
-        </svg>
-      </motion.div>
+      <Link to="/" title="Home">
+        <motion.div
+          whileHover={{ scale: 1.1 }}
+          className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-amber to-rose cursor-pointer"
+          style={{ boxShadow: '0 0 16px rgba(245,158,11,0.25)' }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+          </svg>
+        </motion.div>
+      </Link>
 
       {/* Nav Icons */}
       <nav className="flex flex-col items-center gap-1">
-        {NAV.map(({ to, label, icon, badge }) => (
+        {NAV.map(({ to, label, icon }) => (
           <NavLink key={to} to={to} title={label}>
             {({ isActive }) => (
               <div className={`relative flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-150 ${
@@ -46,11 +48,6 @@ function Sidebar() {
                   />
                 )}
                 {icon}
-                {badge && (
-                  <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose text-[9px] font-bold text-white">
-                    {badge}
-                  </span>
-                )}
               </div>
             )}
           </NavLink>

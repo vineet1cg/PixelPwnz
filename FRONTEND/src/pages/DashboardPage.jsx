@@ -35,6 +35,9 @@ function timeAgo(iso) {
 function formatValue(v, unit) {
   if (v == null || v === '—') return '—'
   if (unit === 'USD') return `$${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+  if (unit === 'INR') return `₹${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+  // Forex pairs (EUR, GBP, JPY, etc.) — show exchange rate
+  if (['EUR', 'GBP', 'JPY', 'AUD', 'USDC'].includes(unit)) return `${Number(v).toFixed(4)} ${unit}`
   return `${Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${unit}`
 }
 
