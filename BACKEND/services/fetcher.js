@@ -100,33 +100,25 @@ const saveSnapshot = async (datasetName, category, sourceApi, location, unit, va
 // ═══════════════════════════════════════════
 // 📈 CRYPTO — CoinGecko (no key needed)
 // Free tier: ~30 calls/min → 1 batch call every 10 min = safe
+// canonical value = USD; INR rate stored in metadata for frontend conversion
 // ═══════════════════════════════════════════
 const fetchAllCrypto = async () => {
     try {
         const ids = CRYPTOS.map(c => c.id).join(',');
-        const response = await axios.get(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=inr,usd`);
-
-        let inrPerUsd = 83.5;
-        try {
-            const usdDataset = await Dataset.findOne({ name: 'forex-inr-usd' });
-            if (usdDataset) {
-                const latestSnap = await Snapshot.findOne({ dataset_id: usdDataset._id }).sort({ timestamp: -1 });
-                if (latestSnap && latestSnap.value) inrPerUsd = 1 / latestSnap.value;
-            }
-        } catch (e) {
-            console.error('Error fetching forex rate:', e.message);
-        }
+        // CoinGecko returns both USD and INR natively — use that as ground truth
+        const response = await axios.get(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd,inr`);
 
         for (const crypto of CRYPTOS) {
             const priceUSD = response.data[crypto.id]?.usd;
+            const priceINR = response.data[crypto.id]?.inr;
             if (priceUSD !== undefined) {
-                const computedINR = priceUSD * inrPerUsd;
+                const usdToInr = priceINR && priceUSD ? parseFloat((priceINR / priceUSD).toFixed(4)) : null;
                 await saveSnapshot(
-                    `crypto-${crypto.id}`, 'crypto', 'coingecko', 'India', 'INR',
-                    computedINR,
-                    { symbol: crypto.symbol, usd: priceUSD, inr: computedINR }
+                    `crypto-${crypto.id}`, 'crypto', 'coingecko', 'global', 'USD',
+                    priceUSD,   // ← canonical USD value; frontend converts with metadata.usd_to_inr
+                    { symbol: crypto.symbol, usd: priceUSD, inr: priceINR, usd_to_inr: usdToInr, inr_value: priceINR }
                 );
-                console.log(`  ✅ ${crypto.name}: ₹${computedINR} ($${priceUSD})`);
+                console.log(`  ✅ ${crypto.name}: $${priceUSD} (₹${priceINR})`);
             }
         }
     } catch (error) {

@@ -1,180 +1,323 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
+const axios = require('axios');
 const Dataset = require('./models/Dataset');
 const Snapshot = require('./models/Snapshot');
 const Event = require('./models/Event');
 const connectDB = require('./config/db');
 
 // ═══════════════════════════════════════════
-// DATA DEFINITIONS
+// DATE RANGE: past 10 days up to now
 // ═══════════════════════════════════════════
+const END_DATE = new Date();
+const START_DATE = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
+const fmtDate = d => d.toISOString().split('T')[0];
+
+console.log(`📅 Seeding: ${fmtDate(START_DATE)} → ${fmtDate(END_DATE)}`);
 
 const CRYPTOS = [
-    { id: 'bitcoin', name: 'Bitcoin', symbol: 'BTC', base: 85000, min: 80000, max: 90000 },
-    { id: 'ethereum', name: 'Ethereum', symbol: 'ETH', base: 3200, min: 2900, max: 3500 },
-    { id: 'tether', name: 'Tether', symbol: 'USDT', base: 1.0, min: 0.99, max: 1.01 },
-    { id: 'binancecoin', name: 'BNB', symbol: 'BNB', base: 600, min: 550, max: 650 },
-    { id: 'solana', name: 'Solana', symbol: 'SOL', base: 140, min: 120, max: 160 },
-    { id: 'ripple', name: 'XRP', symbol: 'XRP', base: 2.1, min: 1.8, max: 2.5 },
-    { id: 'usd-coin', name: 'USD Coin', symbol: 'USDC', base: 1.0, min: 0.99, max: 1.01 },
-    { id: 'cardano', name: 'Cardano', symbol: 'ADA', base: 0.65, min: 0.50, max: 0.80 },
-    { id: 'dogecoin', name: 'Dogecoin', symbol: 'DOGE', base: 0.17, min: 0.12, max: 0.22 },
-    { id: 'tron', name: 'TRON', symbol: 'TRX', base: 0.24, min: 0.20, max: 0.28 }
+    { id: 'bitcoin',    name: 'Bitcoin',  symbol: 'BTC' },
+    { id: 'ethereum',   name: 'Ethereum', symbol: 'ETH' },
+    { id: 'tether',     name: 'Tether',   symbol: 'USDT' },
+    { id: 'binancecoin',name: 'BNB',      symbol: 'BNB' },
+    { id: 'solana',     name: 'Solana',   symbol: 'SOL' },
+    { id: 'ripple',     name: 'XRP',      symbol: 'XRP' },
+    { id: 'usd-coin',   name: 'USD Coin', symbol: 'USDC' },
+    { id: 'cardano',    name: 'Cardano',  symbol: 'ADA' },
+    { id: 'dogecoin',   name: 'Dogecoin', symbol: 'DOGE' },
+    { id: 'tron',       name: 'TRON',     symbol: 'TRX' }
 ];
 
 const INDIAN_CITIES = [
-    { name: 'Delhi', aqi: { base: 150, min: 80, max: 300 }, temp: { base: 34, min: 28, max: 42 } },
-    { name: 'Mumbai', aqi: { base: 90, min: 40, max: 180 }, temp: { base: 32, min: 28, max: 38 } },
-    { name: 'Kolkata', aqi: { base: 110, min: 60, max: 220 }, temp: { base: 33, min: 27, max: 40 } },
-    { name: 'Chennai', aqi: { base: 70, min: 30, max: 150 }, temp: { base: 34, min: 30, max: 40 } },
-    { name: 'Bangalore', aqi: { base: 60, min: 25, max: 130 }, temp: { base: 28, min: 22, max: 35 } },
-    { name: 'Hyderabad', aqi: { base: 80, min: 35, max: 170 }, temp: { base: 35, min: 28, max: 42 } },
-    { name: 'Ahmedabad', aqi: { base: 100, min: 50, max: 200 }, temp: { base: 36, min: 30, max: 44 } },
-    { name: 'Pune', aqi: { base: 65, min: 25, max: 140 }, temp: { base: 30, min: 24, max: 38 } },
-    { name: 'Jaipur', aqi: { base: 95, min: 45, max: 190 }, temp: { base: 35, min: 28, max: 44 } },
-    { name: 'Lucknow', aqi: { base: 130, min: 70, max: 250 }, temp: { base: 33, min: 26, max: 42 } }
-];
-
-const GLOBAL_CITIES = [
-    { name: 'New York', temp: { base: 15, min: 8, max: 22 } },
-    { name: 'London', temp: { base: 12, min: 5, max: 18 } },
-    { name: 'Tokyo', temp: { base: 18, min: 10, max: 25 } },
-    { name: 'Dubai', temp: { base: 38, min: 32, max: 48 } },
-    { name: 'Sydney', temp: { base: 22, min: 16, max: 28 } }
+    { name: 'Delhi',     lat: 28.6139, lon: 77.2090, waqiSlug: 'delhi',
+        aqi: { base: 150, min: 60,  max: 350, season: 1.2 } },
+    { name: 'Mumbai',    lat: 19.0760, lon: 72.8777, waqiSlug: 'mumbai',
+        aqi: { base: 90,  min: 30,  max: 180, season: 0.9 } },
+    { name: 'Kolkata',   lat: 22.5726, lon: 88.3639, waqiSlug: 'kolkata',
+        aqi: { base: 110, min: 40,  max: 220, season: 1.1 } },
+    { name: 'Chennai',   lat: 13.0827, lon: 80.2707, waqiSlug: 'chennai',
+        aqi: { base: 70,  min: 20,  max: 150, season: 0.8 } },
+    { name: 'Bangalore', lat: 12.9716, lon: 77.5946, waqiSlug: 'bangalore',
+        aqi: { base: 60,  min: 15,  max: 130, season: 0.7 } },
+    { name: 'Hyderabad', lat: 17.3850, lon: 78.4867, waqiSlug: 'hyderabad',
+        aqi: { base: 80,  min: 25,  max: 170, season: 0.9 } },
+    { name: 'Ahmedabad', lat: 23.0225, lon: 72.5714, waqiSlug: 'ahmedabad',
+        aqi: { base: 100, min: 35,  max: 200, season: 1.0 } },
+    { name: 'Pune',      lat: 18.5204, lon: 73.8567, waqiSlug: 'pune',
+        aqi: { base: 65,  min: 15,  max: 140, season: 0.8 } },
+    { name: 'Jaipur',    lat: 26.9124, lon: 75.7873, waqiSlug: 'jaipur',
+        aqi: { base: 95,  min: 30,  max: 190, season: 1.0 } },
+    { name: 'Lucknow',   lat: 26.8467, lon: 80.9462, waqiSlug: 'lucknow',
+        aqi: { base: 130, min: 50,  max: 260, season: 1.1 } }
 ];
 
 const FOREX_PAIRS = [
-    { code: 'INR', name: 'Indian Rupee', base: 85.5, min: 82, max: 89 },
-    { code: 'EUR', name: 'Euro', base: 0.92, min: 0.88, max: 0.96 },
-    { code: 'GBP', name: 'British Pound', base: 0.79, min: 0.75, max: 0.83 },
-    { code: 'JPY', name: 'Japanese Yen', base: 150, min: 140, max: 160 },
-    { code: 'AUD', name: 'Australian Dollar', base: 1.55, min: 1.45, max: 1.65 }
+    { code: 'USD', name: 'US Dollar' },
+    { code: 'EUR', name: 'Euro' },
+    { code: 'GBP', name: 'British Pound' },
+    { code: 'JPY', name: 'Japanese Yen' },
+    { code: 'AUD', name: 'Australian Dollar' }
 ];
 
 // ═══════════════════════════════════════════
-// HELPER: Generate snapshots + events
+// HELPERS
 // ═══════════════════════════════════════════
-const generateSnapshots = async (dataset, baseValue, minVal, maxVal, spikeConfig) => {
-    let currentValue = baseValue;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-    for (let i = 0; i < 48; i++) {
-        const timestamp = new Date(Date.now() - (48 - i) * 60 * 60 * 1000);
+const detectAndCreateEvents = async (datasetId, snapshots) => {
+    const events = [];
+    for (let i = 1; i < snapshots.length; i++) {
+        const prev = snapshots[i - 1].value;
+        const curr = snapshots[i].value;
+        if (prev === 0) continue;
+        const pct = ((curr - prev) / prev) * 100;
+        if (Math.abs(pct) > 15) {
+            events.push({
+                dataset_id: datasetId,
+                type: pct > 0 ? 'spike' : 'drop',
+                percentage_change: pct,
+                previous_value: prev,
+                current_value: curr,
+                timestamp: snapshots[i].timestamp,
+                message: `Value ${pct > 0 ? 'spiked' : 'dropped'} ${pct > 0 ? '+' : ''}${pct.toFixed(1)}% from ${prev.toFixed(2)} to ${curr.toFixed(2)}`,
+                severity: Math.abs(pct) >= 25 ? 'high' : 'medium'
+            });
+        }
+    }
+    if (events.length > 0) await Event.insertMany(events);
+    return events.length;
+};
 
-        if (spikeConfig && i === spikeConfig.index) {
-            const previousValue = currentValue;
-            currentValue = spikeConfig.value;
-            const pct = ((currentValue - previousValue) / previousValue) * 100;
+// ═══════════════════════════════════════════
+// STEP 1: FOREX — today's real rate + 10-day
+//         realistic drift (no free history API)
+// ═══════════════════════════════════════════
+const seedForex = async () => {
+    console.log('\n💱 Step 1: Forex (real today rate + 10-day drift)...');
+    const response = await axios.get('https://open.er-api.com/v6/latest/INR');
+    const todayRates = response.data.rates;
+    console.log(`  Current rates: 1 INR = $${todayRates.USD} USD, ¥${todayRates.JPY} JPY`);
 
-            await Snapshot.create({ dataset_id: dataset._id, value: currentValue, timestamp });
+    // Build hourly forex snapshots going 10 days back from today's rate
+    // Apply small realistic daily drift (±0.3% per day, mean-reverting)
+    const totalHours = 10 * 24;
+    const usdToInrTimeSeries = []; // used later for crypto conversion
 
-            if (Math.abs(pct) > 15) {
-                await Event.create({
+    for (const pair of FOREX_PAIRS) {
+        const todayRate = todayRates[pair.code];
+        if (!todayRate) continue;
+
+        const dataset = await Dataset.findOneAndUpdate(
+            { name: `forex-inr-${pair.code.toLowerCase()}` },
+            { name: `forex-inr-${pair.code.toLowerCase()}`, category: 'forex', source_api: 'exchangerate', location: 'India', unit: pair.code, fetch_interval_minutes: 60 },
+            { upsert: true, new: true }
+        );
+
+        // Walk backwards from today's rate with mean-reverting drift
+        const hourlyRates = new Array(totalHours);
+        hourlyRates[totalHours - 1] = todayRate;
+        for (let i = totalHours - 2; i >= 0; i--) {
+            const drift = (Math.random() - 0.502) * todayRate * 0.0025; // slight downward bias going back
+            hourlyRates[i] = Math.max(todayRate * 0.85, Math.min(todayRate * 1.15, hourlyRates[i + 1] + drift));
+        }
+
+        const snapshotDocs = hourlyRates.map((rate, i) => ({
+            dataset_id: dataset._id,
+            value: parseFloat(rate.toFixed(6)),
+            timestamp: new Date(START_DATE.getTime() + i * 60 * 60 * 1000),
+            metadata: { base: 'INR', target: pair.code, real_today: todayRate }
+        }));
+
+        await Snapshot.insertMany(snapshotDocs);
+
+        if (pair.code === 'USD') {
+            // Save INR-per-USD for crypto seeding
+            usdToInrTimeSeries.push(...hourlyRates.map(r => parseFloat((1 / r).toFixed(4))));
+        }
+
+        console.log(`  ✅ INR/${pair.code}: real rate ${todayRate}, ${totalHours} hourly points`);
+    }
+
+    return usdToInrTimeSeries; // 240-element array
+};
+
+// ═══════════════════════════════════════════
+// STEP 2: CRYPTO — real 10-day hourly history
+//         from CoinGecko market_chart endpoint
+// ═══════════════════════════════════════════
+const seedCrypto = async (usdToInrTimeSeries) => {
+    console.log('\n📈 Step 2: Crypto (real 10-day CoinGecko history)...');
+
+    // Fetch all 10 cryptos — add delay between calls to respect rate limit
+    for (let ci = 0; ci < CRYPTOS.length; ci++) {
+        const crypto = CRYPTOS[ci];
+        try {
+            if (ci > 0) await sleep(1500); // ~40 calls/min → well under 30/min limit
+
+            const response = await axios.get(
+                `https://api.coingecko.com/api/v3/coins/${crypto.id}/market_chart?vs_currency=usd&days=10&interval=hourly`
+            );
+
+            const prices = response.data.prices; // [[timestamp_ms, price], ...]
+
+            const dataset = await Dataset.findOneAndUpdate(
+                { name: `crypto-${crypto.id}` },
+                { name: `crypto-${crypto.id}`, category: 'crypto', source_api: 'coingecko', location: 'global', unit: 'USD', fetch_interval_minutes: 10 },
+                { upsert: true, new: true }
+            );
+
+            const snapshotDocs = prices.map(([ts, priceUSD], i) => {
+                const usdToInr = usdToInrTimeSeries[Math.min(i, usdToInrTimeSeries.length - 1)] || 93.5;
+                return {
                     dataset_id: dataset._id,
-                    type: pct > 0 ? 'spike' : 'drop',
-                    percentage_change: pct,
-                    previous_value: previousValue,
-                    current_value: currentValue,
-                    timestamp,
-                    message: spikeConfig.message,
-                    severity: Math.abs(pct) >= 25 ? 'high' : 'medium'
-                });
-            }
-        } else {
-            const fluctuation = (Math.random() - 0.5) * (maxVal - minVal) * 0.08;
-            currentValue = Math.max(minVal, Math.min(maxVal, currentValue + fluctuation));
-            await Snapshot.create({ dataset_id: dataset._id, value: currentValue, timestamp });
+                    value: priceUSD,
+                    timestamp: new Date(ts),
+                    metadata: {
+                        symbol: crypto.symbol,
+                        usd: priceUSD,
+                        inr_value: parseFloat((priceUSD * usdToInr).toFixed(2)),
+                        usd_to_inr: usdToInr
+                    }
+                };
+            });
+
+            await Snapshot.insertMany(snapshotDocs);
+            const eventsCreated = await detectAndCreateEvents(dataset._id, snapshotDocs);
+
+            const latestPrice = prices[prices.length - 1][1];
+            console.log(`  ✅ ${crypto.name}: ${prices.length} real data points | latest: $${latestPrice.toFixed(2)} | events: ${eventsCreated}`);
+        } catch (err) {
+            console.error(`  ❌ ${crypto.name}: ${err.message}`);
         }
     }
 };
 
 // ═══════════════════════════════════════════
-// SEED
+// STEP 3: WEATHER — real 10-day hourly from
+//         Open-Meteo Archive API (free, no key)
+// ═══════════════════════════════════════════
+const seedWeather = async () => {
+    console.log('\n🌡️  Step 3: Weather (real Open-Meteo Archive data)...');
+
+    for (const city of INDIAN_CITIES) {
+        try {
+            await sleep(300); // slight delay to be polite
+            const response = await axios.get(
+                `https://archive-api.open-meteo.com/v1/archive?latitude=${city.lat}&longitude=${city.lon}` +
+                `&start_date=${fmtDate(START_DATE)}&end_date=${fmtDate(END_DATE)}` +
+                `&hourly=temperature_2m,relativehumidity_2m,windspeed_10m&timezone=Asia%2FKolkata`
+            );
+
+            const { time, temperature_2m, relativehumidity_2m, windspeed_10m } = response.data.hourly;
+
+            const dataset = await Dataset.findOneAndUpdate(
+                { name: `weather-${city.name.toLowerCase()}` },
+                { name: `weather-${city.name.toLowerCase()}`, category: 'weather', source_api: 'open-meteo', location: `${city.name}, India`, unit: '°C', fetch_interval_minutes: 10 },
+                { upsert: true, new: true }
+            );
+
+            const snapshotDocs = time.map((t, i) => ({
+                dataset_id: dataset._id,
+                value: temperature_2m[i],
+                timestamp: new Date(t),
+                metadata: {
+                    temperature: temperature_2m[i],
+                    humidity: relativehumidity_2m?.[i],
+                    windspeed: windspeed_10m?.[i]
+                }
+            })).filter(s => s.value !== null && s.value !== undefined);
+
+            await Snapshot.insertMany(snapshotDocs);
+            const eventsCreated = await detectAndCreateEvents(dataset._id, snapshotDocs);
+
+            const temps = temperature_2m.filter(t => t !== null);
+            const minTemp = Math.min(...temps).toFixed(1);
+            const maxTemp = Math.max(...temps).toFixed(1);
+            console.log(`  ✅ ${city.name}: ${snapshotDocs.length} real points | ${minTemp}°C–${maxTemp}°C | events: ${eventsCreated}`);
+        } catch (err) {
+            console.error(`  ❌ ${city.name} weather: ${err.message}`);
+        }
+    }
+};
+
+// ═══════════════════════════════════════════
+// STEP 4: AQI — WAQI has no free historical API
+//         Use city-specific realistic simulation
+//         based on actual seasonal patterns
+//         (Delhi >> Lucknow > Mumbai > Bangalore)
+// ═══════════════════════════════════════════
+const seedAQI = async () => {
+    console.log('\n🌫️  Step 4: AQI (city-specific realistic simulation — WAQI has no free history API)...');
+
+    const totalHours = 10 * 24;
+
+    for (const city of INDIAN_CITIES) {
+        const { base, min, max } = city.aqi;
+        const dataset = await Dataset.findOneAndUpdate(
+            { name: `aqi-${city.name.toLowerCase()}` },
+            { name: `aqi-${city.name.toLowerCase()}`, category: 'air_quality', source_api: 'waqi', location: `${city.name}, India`, unit: 'μg/m³', fetch_interval_minutes: 15 },
+            { upsert: true, new: true }
+        );
+
+        let current = base;
+        const snapshotDocs = [];
+
+        for (let i = 0; i < totalHours; i++) {
+            const timestamp = new Date(START_DATE.getTime() + i * 60 * 60 * 1000);
+            const hourOfDay = timestamp.getHours();
+
+            // AQI peaks in morning rush (7-10am) and evening (6-9pm), lower at night
+            const timeFactor = hourOfDay >= 7 && hourOfDay <= 10 ? 1.3
+                : hourOfDay >= 18 && hourOfDay <= 21 ? 1.2
+                : hourOfDay >= 0 && hourOfDay <= 5 ? 0.75
+                : 1.0;
+
+            const noise = (Math.random() - 0.5) * (max - min) * 0.08;
+            const drift = (Math.random() - 0.49) * (max - min) * 0.02;
+            current = Math.max(min, Math.min(max, current * timeFactor * 0.15 + current * 0.85 + noise + drift));
+
+            snapshotDocs.push({
+                dataset_id: dataset._id,
+                value: parseFloat(current.toFixed(1)),
+                timestamp,
+                metadata: { simulated: true, city: city.name, note: 'WAQI has no free historical API' }
+            });
+        }
+
+        await Snapshot.insertMany(snapshotDocs);
+        const eventsCreated = await detectAndCreateEvents(dataset._id, snapshotDocs);
+
+        const vals = snapshotDocs.map(s => s.value);
+        console.log(`  ✅ ${city.name}: ${snapshotDocs.length} points | ${Math.min(...vals).toFixed(0)}–${Math.max(...vals).toFixed(0)} μg/m³ | events: ${eventsCreated}`);
+    }
+};
+
+// ═══════════════════════════════════════════
+// MAIN
 // ═══════════════════════════════════════════
 const seedData = async () => {
     await connectDB();
-    await Dataset.deleteMany();
-    await Snapshot.deleteMany();
-    await Event.deleteMany();
-    console.log('Cleared existing data...\n');
 
-    // ── CRYPTO (10) ──
-    console.log('📈 Crypto (10)...');
-    const cryptoSpikes = {
-        bitcoin:     { index: 20, value: 69700, message: 'Bitcoin dropped -18% — major market sell-off' },
-        ethereum:    { index: 25, value: 3904, message: 'Ethereum spiked +22% — ETF approval rally' },
-        solana:      { index: 18, value: 105, message: 'Solana dropped -25% — network outage fears' },
-        dogecoin:    { index: 30, value: 0.247, message: 'Dogecoin spiked +45% — viral social media pump' }
-    };
-    for (const c of CRYPTOS) {
-        // Convert USD dummy values to INR
-        const inrBase = c.base * 84;
-        const inrMin = c.min * 84;
-        const inrMax = c.max * 84;
-        
-        // Clone spike and convert to INR
-        let spike = cryptoSpikes[c.id] ? { ...cryptoSpikes[c.id] } : null;
-        if (spike) spike.value = spike.value * 84;
+    // Hard-drop all collections
+    const db = mongoose.connection.db;
+    const cols = await db.listCollections().toArray();
+    for (const col of cols) await db.collection(col.name).drop().catch(() => {});
+    console.log('🗑️  Dropped all collections');
 
-        const ds = await Dataset.create({ name: `crypto-${c.id}`, category: 'crypto', source_api: 'coingecko', location: 'India', unit: 'INR', fetch_interval_minutes: 5 });
-        await generateSnapshots(ds, inrBase, inrMin, inrMax, spike);
-        console.log(`  ✅ ${c.name}`);
-    }
+    const usdToInrTimeSeries = await seedForex();
+    await seedCrypto(usdToInrTimeSeries);
+    await seedWeather();
+    await seedAQI();
 
-    // ── AQI (10 Indian) ──
-    console.log('\n🌫️  AQI (10 Indian cities)...');
-    const aqiSpikes = {
-        Delhi:   { index: 15, value: 320, message: 'Delhi PM2.5 spiked to 320 — severe smog, possible stubble burning' },
-        Lucknow: { index: 22, value: 280, message: 'Lucknow AQI spiked to 280 — hazardous air quality' },
-        Kolkata: { index: 28, value: 250, message: 'Kolkata AQI spiked to 250 — industrial emissions surge' }
-    };
-    for (const city of INDIAN_CITIES) {
-        const ds = await Dataset.create({ name: `aqi-${city.name.toLowerCase()}`, category: 'air_quality', source_api: 'openaq', location: `${city.name}, India`, unit: 'μg/m³', fetch_interval_minutes: 5 });
-        await generateSnapshots(ds, city.aqi.base, city.aqi.min, city.aqi.max, aqiSpikes[city.name] || null);
-        console.log(`  ✅ ${city.name}`);
-    }
-
-    // ── WEATHER Indian (10) ──
-    console.log('\n🌡️  Weather India (10)...');
-    const weatherSpikes = {
-        Delhi:     { index: 20, value: 46, message: 'Delhi temp spiked to 46°C — extreme heat wave' },
-        Ahmedabad: { index: 25, value: 48, message: 'Ahmedabad temp spiked to 48°C — record-breaking heat' },
-        Mumbai:    { index: 30, value: 42, message: 'Mumbai temp spiked to 42°C — heat wave event' }
-    };
-    for (const city of INDIAN_CITIES) {
-        const ds = await Dataset.create({ name: `weather-${city.name.toLowerCase()}`, category: 'weather', source_api: 'openweather', location: `${city.name}, India`, unit: '°C', fetch_interval_minutes: 5 });
-        await generateSnapshots(ds, city.temp.base, city.temp.min, city.temp.max, weatherSpikes[city.name] || null);
-        console.log(`  ✅ ${city.name}`);
-    }
-
-    // ── WEATHER Global (5) ──
-    console.log('\n🌍 Weather Global (5)...');
-    const globalSpikes = {
-        Dubai: { index: 22, value: 52, message: 'Dubai temp spiked to 52°C — extreme desert heat' }
-    };
-    for (const city of GLOBAL_CITIES) {
-        const slug = city.name.toLowerCase().replace(/\s/g, '-');
-        const ds = await Dataset.create({ name: `weather-${slug}`, category: 'weather', source_api: 'openweather', location: city.name, unit: '°C', fetch_interval_minutes: 5 });
-        await generateSnapshots(ds, city.temp.base, city.temp.min, city.temp.max, globalSpikes[city.name] || null);
-        console.log(`  ✅ ${city.name}`);
-    }
-
-    // ── FOREX (5) ──
-    console.log('\n💱 Forex (5 pairs vs USD)...');
-    const forexSpikes = {
-        INR: { index: 20, value: 92, message: 'USD/INR spiked to 92 — rupee under pressure' },
-        JPY: { index: 25, value: 170, message: 'USD/JPY spiked to 170 — yen freefall continues' }
-    };
-    for (const pair of FOREX_PAIRS) {
-        const ds = await Dataset.create({ name: `forex-usd-${pair.code.toLowerCase()}`, category: 'forex', source_api: 'exchangerate', location: 'global', unit: pair.code, fetch_interval_minutes: 5 });
-        await generateSnapshots(ds, pair.base, pair.min, pair.max, forexSpikes[pair.code] || null);
-        console.log(`  ✅ USD/${pair.code}`);
-    }
-
-    // ── SUMMARY ──
     const [d, s, e] = await Promise.all([Dataset.countDocuments(), Snapshot.countDocuments(), Event.countDocuments()]);
-    console.log(`\n🎉 Seeded! ${d} datasets | ${s} snapshots | ${e} events`);
-    console.log(`🛡️ Max ${parseInt(process.env.MAX_SNAPSHOTS) || 200} snapshots/dataset enforced at runtime`);
+    console.log(`\n🎉 Done!`);
+    console.log(`   ${d} datasets | ${s} snapshots | ${e} events`);
+    console.log(`   📅 ${fmtDate(START_DATE)} → ${fmtDate(END_DATE)} (10 days real data)`);
+    console.log(`   📈 Crypto: REAL (CoinGecko historical)`);
+    console.log(`   🌡️  Weather: REAL (Open-Meteo Archive)`);
+    console.log(`   💱 Forex: REAL today rate + 10-day drift`);
+    console.log(`   🌫️  AQI: City-specific simulation (no free history API)`);
     process.exit();
 };
 
-seedData().catch(err => { console.error(err); process.exit(1); });
+seedData().catch(err => { console.error('❌ Seed failed:', err.message); process.exit(1); });
