@@ -120,7 +120,7 @@ function EventLogPage() {
           <h1 className="text-lg font-bold tracking-tight">Event Log</h1>
           <p className="mt-0.5 text-sm text-text-secondary">All detected anomalies, spikes &amp; drops</p>
         </div>
-        <Link to="/" className="rounded-lg border border-edge bg-bg-raised px-3 py-1.5 text-xs text-text-muted transition-colors hover:border-bg-hover">← Back</Link>
+        <Link to="/dashboard" className="rounded-lg border border-edge bg-bg-raised px-3 py-1.5 text-xs text-text-muted transition-colors hover:border-bg-hover">← Back</Link>
       </header>
 
       <div className="px-8 py-6 flex flex-col gap-4">

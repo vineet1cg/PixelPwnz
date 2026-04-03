@@ -8,11 +8,14 @@ const { errorHandler } = require('./utils/errorHandler');
 
 const app = express();
 
-// Connect to Database
+// Connect to Databasewtf 
 connectDB();
 
 // Middleware
-app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:3000'|| 'http://localhost:5173' }));
+const allowedOrigins = process.env.CLIENT_URL
+  ? process.env.CLIENT_URL.split(',')
+  : ['http://localhost:3000', 'http://localhost:5173'];
+app.use(cors({ origin: allowedOrigins }));
 app.use(express.json());
 
 // Health Check Route
