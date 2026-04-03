@@ -118,12 +118,19 @@ const fetchAllCrypto = async () => {
 };
 
 // ═══════════════════════════════════════════
-// 🌫️ AQI — WAQI (free demo token)
+// 🌫️ AQI — WAQI (free token from aqicn.org)
+// Sign up for free token: https://aqicn.org/data-platform/token/
+// The 'demo' token returns SAME data for all cities!
 // ═══════════════════════════════════════════
 const fetchAllAQI = async () => {
+    const token = process.env.WAQI_API_TOKEN || 'demo';
+    if (token === 'demo') {
+        console.warn('  ⚠️ Using WAQI demo token — all cities will show same AQI!');
+        console.warn('  ⚠️ Get a free token: https://aqicn.org/data-platform/token/');
+    }
     for (const city of INDIAN_CITIES) {
         try {
-            const response = await axios.get(`https://api.waqi.info/feed/${city.waqiSlug}/?token=demo`);
+            const response = await axios.get(`https://api.waqi.info/feed/${city.waqiSlug}/?token=${token}`);
             if (response.data.status !== 'ok') continue;
             const pm25 = response.data.data.iaqi?.pm25?.v;
             const aqi = response.data.data.aqi;
@@ -133,7 +140,7 @@ const fetchAllAQI = async () => {
                 `aqi-${city.name.toLowerCase()}`, 'air_quality', 'openaq', `${city.name}, India`, 'μg/m³',
                 value, { aqi, pm25, dominentpol: response.data.data.dominentpol, time: response.data.data.time }
             );
-            console.log(`  ✅ ${city.name} AQI: ${value}`);
+            console.log(`  ✅ ${city.name} AQI: ${value} (PM2.5: ${pm25 || 'N/A'})`);
         } catch (error) {
             console.error(`  ❌ ${city.name} AQI error:`, error.message);
         }
@@ -235,7 +242,8 @@ const fetchSingleDataset = async (datasetName) => {
 
     const aqiMatch = INDIAN_CITIES.find(c => `aqi-${c.name.toLowerCase()}` === datasetName);
     if (aqiMatch) {
-        const response = await axios.get(`https://api.waqi.info/feed/${aqiMatch.waqiSlug}/?token=demo`);
+        const token = process.env.WAQI_API_TOKEN || 'demo';
+        const response = await axios.get(`https://api.waqi.info/feed/${aqiMatch.waqiSlug}/?token=${token}`);
         if (response.data.status === 'ok') {
             const pm25 = response.data.data.iaqi?.pm25?.v;
             const aqi = response.data.data.aqi;
