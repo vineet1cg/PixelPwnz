@@ -127,30 +127,31 @@ const fetchAllCrypto = async () => {
 };
 
 // ═══════════════════════════════════════════
-// 🌫️ AQI — WAQI (free token from aqicn.org)
-// Free tier: 1000 requests/day → 10 cities × 144 fetches/day = 1440
-// → Use 15 min interval for AQI to stay under 1000/day (960/day)
+// ═══════════════════════════════════════════
+// 🌫️ AQI — Open-Meteo Air Quality API (Free, no token required)
 // ═══════════════════════════════════════════
 const fetchAllAQI = async () => {
-    const token = process.env.WAQI_API_TOKEN || 'demo';
-    if (token === 'demo') {
-        console.warn('  ⚠️ Using WAQI demo token — all cities will show same AQI!');
-        console.warn('  ⚠️ Get a free token: https://aqicn.org/data-platform/token/');
-    }
     for (const city of INDIAN_CITIES) {
         try {
-            const response = await axios.get(`https://api.waqi.info/feed/${city.waqiSlug}/?token=${token}`);
-            if (response.data.status !== 'ok') continue;
-            const pm25 = response.data.data.iaqi?.pm25?.v;
-            const pm10 = response.data.data.iaqi?.pm10?.v;
-            const aqi = response.data.data.aqi;
-            const value = pm25 || aqi;
+            const response = await axios.get(
+                `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${city.lat}&longitude=${city.lon}&current=us_aqi,pm10,pm2_5`
+            );
+            
+            const aqiData = response.data.current;
+            if (!aqiData || aqiData.us_aqi === undefined) continue;
+
+            const aqi = aqiData.us_aqi;
+            const pm25 = aqiData.pm2_5;
+            const pm10 = aqiData.pm10;
+            
+            // We use standard AQI as the main timeline value
+            const value = aqi;
 
             await saveSnapshot(
-                `aqi-${city.name.toLowerCase()}`, 'air_quality', 'waqi', `${city.name}, India`, 'μg/m³',
-                value, { aqi, pm25, pm10, dominentpol: response.data.data.dominentpol, time: response.data.data.time }
+                `aqi-${city.name.toLowerCase()}`, 'air_quality', 'open-meteo', `${city.name}, India`, 'AQI',
+                value, { aqi, pm25, pm10, time: aqiData.time }
             );
-            console.log(`  ✅ ${city.name}: AQI ${aqi} | PM2.5: ${pm25 || 'N/A'} | PM10: ${pm10 || 'N/A'}`);
+            console.log(`  ✅ ${city.name}: AQI ${aqi} | PM2.5: ${pm25} | PM10: ${pm10}`);
         } catch (error) {
             console.error(`  ❌ ${city.name} AQI error:`, error.message);
         }

@@ -1,0 +1,191 @@
+﻿Γùç injecting env (2) from .env // tip: Γîÿ override existing { override: true }
+≡ƒôà Seeding: 2026-03-25 ΓåÆ 2026-04-04
+Attempting to connect to Remote MongoDB...
+node : (node:9096) Warning: Accessing non-existent 
+property 'seedData' of module exports inside circular 
+dependency
+At line:1 char:1
++ node seed.js 2>&1 | Out-File -FilePath 
+c:\Users\Admin\Documents\Pixxx ...
++ ~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: 
+((node:9096)     War...ular dependency:String) [], 
+RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+(Use `node --trace-warnings ...` to show where the 
+warning was created)
+Γ£à Remote MongoDB Connected: ac-dhjjvkk-shard-00-02.iwhvfnb.mongodb.net
+≡ƒùæ∩╕Å  Dropped all collections
+
+≡ƒÆ▒ Step 1: Forex (real today rate + 10-day drift)...
+  Current rates: 1 INR = $0.010724 USD, ┬Ñ1.71545 JPY
+(node:9096) [MONGOOSE] Warning: mongoose: the `new` 
+option for `findOneAndUpdate()` and 
+`findOneAndReplace()` is deprecated. Use 
+`returnDocument: 'after'` instead.
+  Γ£à INR/USD: real rate 0.010724, 240 hourly points
+(node:9096) [MONGOOSE] Warning: mongoose: the `new` 
+option for `findOneAndUpdate()` and 
+`findOneAndReplace()` is deprecated. Use 
+`returnDocument: 'after'` instead.
+  Γ£à INR/EUR: real rate 0.009323, 240 hourly points
+(node:9096) [MONGOOSE] Warning: mongoose: the `new` 
+option for `findOneAndUpdate()` and 
+`findOneAndReplace()` is deprecated. Use 
+`returnDocument: 'after'` instead.
+  Γ£à INR/GBP: real rate 0.008134, 240 hourly points
+(node:9096) [MONGOOSE] Warning: mongoose: the `new` 
+option for `findOneAndUpdate()` and 
+`findOneAndReplace()` is deprecated. Use 
+`returnDocument: 'after'` instead.
+  Γ£à INR/JPY: real rate 1.71545, 240 hourly points
+(node:9096) [MONGOOSE] Warning: mongoose: the `new` 
+option for `findOneAndUpdate()` and 
+`findOneAndReplace()` is deprecated. Use 
+`returnDocument: 'after'` instead.
+  Γ£à INR/AUD: real rate 0.015554, 240 hourly points
+
+≡ƒôê Step 2: Crypto (real 10-day CoinGecko history)...
+(node:9096) [MONGOOSE] Warning: mongoose: the `new` 
+option for `findOneAndUpdate()` and 
+`findOneAndReplace()` is deprecated. Use 
+`returnDocument: 'after'` instead.
+  Γ£à Bitcoin: 241 real data points | latest: $66828.76 | events: 0
+(node:9096) [MONGOOSE] Warning: mongoose: the `new` 
+option for `findOneAndUpdate()` and 
+`findOneAndReplace()` is deprecated. Use 
+`returnDocument: 'after'` instead.
+  Γ£à Ethereum: 241 real data points | latest: $2048.90 | events: 0
+(node:9096) [MONGOOSE] Warning: mongoose: the `new` 
+option for `findOneAndUpdate()` and 
+`findOneAndReplace()` is deprecated. Use 
+`returnDocument: 'after'` instead.
+  Γ£à Tether: 241 real data points | latest: $1.00 | events: 0
+(node:9096) [MONGOOSE] Warning: mongoose: the `new` 
+option for `findOneAndUpdate()` and 
+`findOneAndReplace()` is deprecated. Use 
+`returnDocument: 'after'` instead.
+  Γ£à BNB: 241 real data points | latest: $587.99 | events: 0
+(node:9096) [MONGOOSE] Warning: mongoose: the `new` 
+option for `findOneAndUpdate()` and 
+`findOneAndReplace()` is deprecated. Use 
+`returnDocument: 'after'` instead.
+  Γ£à Solana: 241 real data points | latest: $80.17 | events: 0
+  Γ¥î XRP: Request failed with status code 429
+  Γ¥î USD Coin: Request failed with status code 429
+  Γ¥î Cardano: Request failed with status code 429
+  Γ¥î Dogecoin: Request failed with status code 429
+  Γ¥î TRON: Request failed with status code 429
+
+≡ƒîí∩╕Å  Step 3: Weather (real Open-Meteo Archive data)...
+(node:9096) [MONGOOSE] Warning: mongoose: the `new` 
+option for `findOneAndUpdate()` and 
+`findOneAndReplace()` is deprecated. Use 
+`returnDocument: 'after'` instead.
+  Γ£à Delhi: 264 real points | 17.7┬░CΓÇô35.0┬░C | events: 1
+(node:9096) [MONGOOSE] Warning: mongoose: the `new` 
+option for `findOneAndUpdate()` and 
+`findOneAndReplace()` is deprecated. Use 
+`returnDocument: 'after'` instead.
+  Γ£à Mumbai: 264 real points | 24.0┬░CΓÇô36.8┬░C | events: 0
+(node:9096) [MONGOOSE] Warning: mongoose: the `new` 
+option for `findOneAndUpdate()` and 
+`findOneAndReplace()` is deprecated. Use 
+`returnDocument: 'after'` instead.
+  Γ£à Kolkata: 264 real points | 22.0┬░CΓÇô38.3┬░C | events: 2
+(node:9096) [MONGOOSE] Warning: mongoose: the `new` 
+option for `findOneAndUpdate()` and 
+`findOneAndReplace()` is deprecated. Use 
+`returnDocument: 'after'` instead.
+  Γ£à Chennai: 264 real points | 24.1┬░CΓÇô35.2┬░C | events: 0
+(node:9096) [MONGOOSE] Warning: mongoose: the `new` 
+option for `findOneAndUpdate()` and 
+`findOneAndReplace()` is deprecated. Use 
+`returnDocument: 'after'` instead.
+  Γ£à Bangalore: 264 real points | 19.9┬░CΓÇô34.8┬░C | events: 0
+(node:9096) [MONGOOSE] Warning: mongoose: the `new` 
+option for `findOneAndUpdate()` and 
+`findOneAndReplace()` is deprecated. Use 
+`returnDocument: 'after'` instead.
+  Γ£à Hyderabad: 264 real points | 23.2┬░CΓÇô36.5┬░C | events: 0
+(node:9096) [MONGOOSE] Warning: mongoose: the `new` 
+option for `findOneAndUpdate()` and 
+`findOneAndReplace()` is deprecated. Use 
+`returnDocument: 'after'` instead.
+  Γ£à Ahmedabad: 264 real points | 23.8┬░CΓÇô37.5┬░C | events: 0
+(node:9096) [MONGOOSE] Warning: mongoose: the `new` 
+option for `findOneAndUpdate()` and 
+`findOneAndReplace()` is deprecated. Use 
+`returnDocument: 'after'` instead.
+  Γ£à Pune: 264 real points | 19.7┬░CΓÇô37.0┬░C | events: 3
+(node:9096) [MONGOOSE] Warning: mongoose: the `new` 
+option for `findOneAndUpdate()` and 
+`findOneAndReplace()` is deprecated. Use 
+`returnDocument: 'after'` instead.
+  Γ£à Jaipur: 264 real points | 18.5┬░CΓÇô35.3┬░C | events: 2
+(node:9096) [MONGOOSE] Warning: mongoose: the `new` 
+option for `findOneAndUpdate()` and 
+`findOneAndReplace()` is deprecated. Use 
+`returnDocument: 'after'` instead.
+  Γ£à Lucknow: 264 real points | 20.4┬░CΓÇô37.7┬░C | events: 4
+
+≡ƒî½∩╕Å  Step 4: AQI (city-specific realistic simulation)...
+(node:9096) [MONGOOSE] Warning: mongoose: the `new` 
+option for `findOneAndUpdate()` and 
+`findOneAndReplace()` is deprecated. Use 
+`returnDocument: 'after'` instead.
+  Γ£à Delhi: 240 points | 63ΓÇô191 ╬╝g/m┬│ | events: 2
+(node:9096) [MONGOOSE] Warning: mongoose: the `new` 
+option for `findOneAndUpdate()` and 
+`findOneAndReplace()` is deprecated. Use 
+`returnDocument: 'after'` instead.
+  Γ£à Mumbai: 240 points | 89ΓÇô180 ╬╝g/m┬│ | events: 0
+(node:9096) [MONGOOSE] Warning: mongoose: the `new` 
+option for `findOneAndUpdate()` and 
+`findOneAndReplace()` is deprecated. Use 
+`returnDocument: 'after'` instead.
+  Γ£à Kolkata: 240 points | 74ΓÇô181 ╬╝g/m┬│ | events: 0
+(node:9096) [MONGOOSE] Warning: mongoose: the `new` 
+option for `findOneAndUpdate()` and 
+`findOneAndReplace()` is deprecated. Use 
+`returnDocument: 'after'` instead.
+  Γ£à Chennai: 240 points | 61ΓÇô150 ╬╝g/m┬│ | events: 0
+(node:9096) [MONGOOSE] Warning: mongoose: the `new` 
+option for `findOneAndUpdate()` and 
+`findOneAndReplace()` is deprecated. Use 
+`returnDocument: 'after'` instead.
+  Γ£à Bangalore: 240 points | 33ΓÇô92 ╬╝g/m┬│ | events: 1
+(node:9096) [MONGOOSE] Warning: mongoose: the `new` 
+option for `findOneAndUpdate()` and 
+`findOneAndReplace()` is deprecated. Use 
+`returnDocument: 'after'` instead.
+  Γ£à Hyderabad: 240 points | 72ΓÇô170 ╬╝g/m┬│ | events: 0
+(node:9096) [MONGOOSE] Warning: mongoose: the `new` 
+option for `findOneAndUpdate()` and 
+`findOneAndReplace()` is deprecated. Use 
+`returnDocument: 'after'` instead.
+  Γ£à Ahmedabad: 240 points | 35ΓÇô136 ╬╝g/m┬│ | events: 6
+(node:9096) [MONGOOSE] Warning: mongoose: the `new` 
+option for `findOneAndUpdate()` and 
+`findOneAndReplace()` is deprecated. Use 
+`returnDocument: 'after'` instead.
+  Γ£à Pune: 240 points | 63ΓÇô140 ╬╝g/m┬│ | events: 0
+(node:9096) [MONGOOSE] Warning: mongoose: the `new` 
+option for `findOneAndUpdate()` and 
+`findOneAndReplace()` is deprecated. Use 
+`returnDocument: 'after'` instead.
+  Γ£à Jaipur: 240 points | 103ΓÇô190 ╬╝g/m┬│ | events: 0
+(node:9096) [MONGOOSE] Warning: mongoose: the `new` 
+option for `findOneAndUpdate()` and 
+`findOneAndReplace()` is deprecated. Use 
+`returnDocument: 'after'` instead.
+  Γ£à Lucknow: 240 points | 104ΓÇô190 ╬╝g/m┬│ | events: 0
+
+≡ƒÄë Done!
+   30 datasets | 7445 snapshots | 21 events
+   ≡ƒôà 2026-03-25 ΓåÆ 2026-04-04 (10 days real data)
+   ≡ƒôê Crypto: REAL (CoinGecko historical)
+   ≡ƒîí∩╕Å  Weather: REAL (Open-Meteo Archive)
+   ≡ƒÆ▒ Forex: REAL today rate + 10-day drift
+   ≡ƒî½∩╕Å  AQI: City-specific simulation (no free history API)

@@ -241,13 +241,13 @@ const seedWeather = async () => {
 };
 
 // ═══════════════════════════════════════════
-// STEP 4: AQI — WAQI has no free historical API
+// STEP 4: AQI — Open-Meteo Air Quality API
 //         Use city-specific realistic simulation
 //         based on actual seasonal patterns
 //         (Delhi >> Lucknow > Mumbai > Bangalore)
 // ═══════════════════════════════════════════
 const seedAQI = async () => {
-    console.log('\n🌫️  Step 4: AQI (city-specific realistic simulation — WAQI has no free history API)...');
+    console.log('\n🌫️  Step 4: AQI (city-specific realistic simulation)...');
 
     const totalHours = 10 * 24;
 
@@ -255,7 +255,7 @@ const seedAQI = async () => {
         const { base, min, max } = city.aqi;
         const dataset = await Dataset.findOneAndUpdate(
             { name: `aqi-${city.name.toLowerCase()}` },
-            { name: `aqi-${city.name.toLowerCase()}`, category: 'air_quality', source_api: 'waqi', location: `${city.name}, India`, unit: 'μg/m³', fetch_interval_minutes: 15 },
+            { name: `aqi-${city.name.toLowerCase()}`, category: 'air_quality', source_api: 'open-meteo', location: `${city.name}, India`, unit: 'AQI', fetch_interval_minutes: 1 },
             { upsert: true, new: true }
         );
 
@@ -280,7 +280,7 @@ const seedAQI = async () => {
                 dataset_id: dataset._id,
                 value: parseFloat(current.toFixed(1)),
                 timestamp,
-                metadata: { simulated: true, city: city.name, note: 'WAQI has no free historical API' }
+                metadata: { simulated: true, city: city.name, note: 'Open-Meteo AQI historical API simulated' }
             });
         }
 
