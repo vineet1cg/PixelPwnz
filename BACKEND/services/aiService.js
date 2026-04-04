@@ -18,7 +18,27 @@ Details: The value changed by ${event.percentage_change.toFixed(2)}%, moving fro
 
 Please provide a concise (2-3 sentences), plausible, and factual explanation of what could have caused this particular fluctuation. Make it sound professional but easy to understand. Do not mention that you are an AI.`;
 
-        // Using free open source endpoint (no API key required)
+        // If a Groq API Key is provided in the .env, use that over REST (extremely fast, no extra npm packages needed)
+        if (process.env.GROQ_API_KEY) {
+            const groqResponse = await axios.post(
+                'https://api.groq.com/openai/v1/chat/completions',
+                {
+                    model: 'llama-3.1-8b-instant',
+                    messages: [
+                        { role: 'user', content: prompt }
+                    ]
+                },
+                {
+                    headers: {
+                        'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+            return groqResponse.data.choices[0].message.content;
+        }
+
+        // Fallback: Using free open source endpoint (no API key required)
         const response = await axios.post('https://text.pollinations.ai/', {
             messages: [
                 { role: 'system', content: 'You are a professional data analyst.' },
@@ -28,7 +48,7 @@ Please provide a concise (2-3 sentences), plausible, and factual explanation of 
 
         return response.data;
     } catch (error) {
-        console.error('Open Source API Error:', error.message);
+        console.error('AI Service Error:', error.message);
         return `Analysis failed: Could not generate explanation at this time. (${error.message})`;
     }
 };
