@@ -1,9 +1,18 @@
 const express = require('express');
 const router = express.Router();
-const { getAllEvents, getEventsForDataset, explainEvent } = require('../controllers/eventController');
+const {
+    getAllEvents,
+    getEventsForDataset,
+    getFlaggedEvents,
+    explainEvent,
+    flagEvent
+} = require('../controllers/eventController');
+const { requireAuth, optionalAuth } = require('../middlewares/authMiddleware');
 
-router.get('/events', getAllEvents);
-router.get('/events/:id/explain', explainEvent);
-router.get('/datasets/:id/events', getEventsForDataset);
+router.get('/events', optionalAuth, getAllEvents);
+router.get('/events/flagged', requireAuth, getFlaggedEvents);
+router.post('/events/:id/flag', requireAuth, flagEvent);
+router.get('/events/:id/explain', optionalAuth, explainEvent);
+router.get('/datasets/:id/events', optionalAuth, getEventsForDataset);
 
 module.exports = router;

@@ -7,10 +7,10 @@ const Event = require('./models/Event');
 const connectDB = require('./config/db');
 
 // ═══════════════════════════════════════════
-// DATE RANGE: past 10 days up to now
+// DATE RANGE: past 30 days up to now
 // ═══════════════════════════════════════════
 const END_DATE = new Date();
-const START_DATE = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
+const START_DATE = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 const fmtDate = d => d.toISOString().split('T')[0];
 
 console.log(`📅 Seeding: ${fmtDate(START_DATE)} → ${fmtDate(END_DATE)}`);
@@ -116,9 +116,9 @@ const seedForex = async () => {
         if (!todayRate) continue;
 
         const dataset = await Dataset.findOneAndUpdate(
-            { name: `forex-inr-${pair.code.toLowerCase()}` },
-            { name: `forex-inr-${pair.code.toLowerCase()}`, category: 'forex', source_api: 'exchangerate', location: 'India', unit: pair.code, fetch_interval_minutes: 60 },
-            { upsert: true, new: true }
+            { name: `forex-${pair.code.toLowerCase()}-inr` },
+            { name: `forex-${pair.code.toLowerCase()}-inr`, category: 'forex', source_api: 'exchangerate', location: 'India', unit: 'INR', fetch_interval_minutes: 60 },
+            { upsert: true, returnDocument: 'after' }
         );
 
         // Walk backwards from today's rate with mean-reverting drift
@@ -131,9 +131,9 @@ const seedForex = async () => {
 
         const snapshotDocs = hourlyRates.map((rate, i) => ({
             dataset_id: dataset._id,
-            value: parseFloat(rate.toFixed(6)),
+            value: parseFloat((1 / rate).toFixed(4)), // 1 foreign = X INR
             timestamp: new Date(START_DATE.getTime() + i * 60 * 60 * 1000),
-            metadata: { base: 'INR', target: pair.code, real_today: todayRate }
+            metadata: { base: pair.code, target: 'INR', original_rate: rate, real_today: todayRate }
         }));
 
         await Snapshot.insertMany(snapshotDocs);
@@ -150,62 +150,84 @@ const seedForex = async () => {
 };
 
 // ═══════════════════════════════════════════
-// STEP 2: CRYPTO — real 10-day hourly history
+// STEP 2: CRYPTO — real 30-day hourly history
 //         from CoinGecko market_chart endpoint
 // ═══════════════════════════════════════════
 const seedCrypto = async (usdToInrTimeSeries) => {
-    console.log('\n📈 Step 2: Crypto (real 10-day CoinGecko history)...');
+    console.log('\n📈 Step 2: Crypto (real 30-day CoinGecko history in INR)...');
 
-    // Fetch all 10 cryptos — add delay between calls to respect rate limit
+    // Fetch all 10 cryptos — with aggressive rate limiting and retry
     for (let ci = 0; ci < CRYPTOS.length; ci++) {
         const crypto = CRYPTOS[ci];
-        try {
-            if (ci > 0) await sleep(1500); // ~40 calls/min → well under 30/min limit
+        let retries = 0;
+        const maxRetries = 3;
+        let success = false;
 
-            const response = await axios.get(
-                `https://api.coingecko.com/api/v3/coins/${crypto.id}/market_chart?vs_currency=usd&days=10&interval=hourly`
-            );
+        while (!success && retries < maxRetries) {
+            try {
+                if (ci > 0 || retries > 0) {
+                    const delayMs = 4000 + (retries * 2000); // 4s base + exponential backoff
+                    await sleep(delayMs);
+                }
 
-            const prices = response.data.prices; // [[timestamp_ms, price], ...]
+                const response = await axios.get(
+                    `https://api.coingecko.com/api/v3/coins/${crypto.id}/market_chart?vs_currency=inr&days=30&interval=hourly`,
+                    { timeout: 10000 }
+                );
 
-            const dataset = await Dataset.findOneAndUpdate(
-                { name: `crypto-${crypto.id}` },
-                { name: `crypto-${crypto.id}`, category: 'crypto', source_api: 'coingecko', location: 'global', unit: 'USD', fetch_interval_minutes: 10 },
-                { upsert: true, new: true }
-            );
+                const prices = response.data.prices; // [[timestamp_ms, price], ...]
 
-            const snapshotDocs = prices.map(([ts, priceUSD], i) => {
-                const usdToInr = usdToInrTimeSeries[Math.min(i, usdToInrTimeSeries.length - 1)] || 93.5;
-                return {
-                    dataset_id: dataset._id,
-                    value: priceUSD,
-                    timestamp: new Date(ts),
-                    metadata: {
-                        symbol: crypto.symbol,
-                        usd: priceUSD,
-                        inr_value: parseFloat((priceUSD * usdToInr).toFixed(2)),
-                        usd_to_inr: usdToInr
+                const dataset = await Dataset.findOneAndUpdate(
+                    { name: `crypto-${crypto.id}` },
+                    { name: `crypto-${crypto.id}`, category: 'crypto', source_api: 'coingecko', location: 'global', unit: 'INR', fetch_interval_minutes: 10 },
+                    { upsert: true, returnDocument: 'after' }
+                );
+
+                const snapshotDocs = prices.map(([ts, priceINR], i) => {
+                    const usdToInr = usdToInrTimeSeries[Math.min(i, usdToInrTimeSeries.length - 1)] || 93.5;
+                    const priceUSD = parseFloat((priceINR / usdToInr).toFixed(2));
+                    return {
+                        dataset_id: dataset._id,
+                        value: priceINR,
+                        timestamp: new Date(ts),
+                        metadata: {
+                            symbol: crypto.symbol,
+                            inr: priceINR,
+                            usd: priceUSD,
+                            usd_to_inr: usdToInr
+                        }
+                    };
+                });
+
+                await Snapshot.insertMany(snapshotDocs);
+                const eventsCreated = await detectAndCreateEvents(dataset._id, snapshotDocs);
+
+                const latestPrice = prices[prices.length - 1][1];
+                console.log(`  ✅ ${crypto.name}: ${prices.length} real data points | latest: ₹${latestPrice.toFixed(0)} | events: ${eventsCreated}`);
+                success = true;
+            } catch (err) {
+                retries++;
+                if (err.response?.status === 429) {
+                    if (retries < maxRetries) {
+                        console.log(`  ⏳ ${crypto.name}: Rate limited. Retrying in ${4000 + ((retries - 1) * 2000)}ms... (${retries}/${maxRetries})`);
+                    } else {
+                        console.error(`  ❌ ${crypto.name}: Rate limited after ${maxRetries} retries. Skipping.`);
                     }
-                };
-            });
-
-            await Snapshot.insertMany(snapshotDocs);
-            const eventsCreated = await detectAndCreateEvents(dataset._id, snapshotDocs);
-
-            const latestPrice = prices[prices.length - 1][1];
-            console.log(`  ✅ ${crypto.name}: ${prices.length} real data points | latest: $${latestPrice.toFixed(2)} | events: ${eventsCreated}`);
-        } catch (err) {
-            console.error(`  ❌ ${crypto.name}: ${err.message}`);
+                } else {
+                    console.error(`  ❌ ${crypto.name}: ${err.message}`);
+                    success = true; // Don't retry non-rate-limit errors
+                }
+            }
         }
     }
 };
 
 // ═══════════════════════════════════════════
-// STEP 3: WEATHER — real 10-day hourly from
+// STEP 3: WEATHER — real 30-day hourly from
 //         Open-Meteo Archive API (free, no key)
 // ═══════════════════════════════════════════
 const seedWeather = async () => {
-    console.log('\n🌡️  Step 3: Weather (real Open-Meteo Archive data)...');
+    console.log('\n🌡️  Step 3: Weather (real Open-Meteo Archive data - 30 days)...');
 
     for (const city of INDIAN_CITIES) {
         try {
@@ -221,7 +243,7 @@ const seedWeather = async () => {
             const dataset = await Dataset.findOneAndUpdate(
                 { name: `weather-${city.name.toLowerCase()}` },
                 { name: `weather-${city.name.toLowerCase()}`, category: 'weather', source_api: 'open-meteo', location: `${city.name}, India`, unit: '°C', fetch_interval_minutes: 10 },
-                { upsert: true, new: true }
+                { upsert: true, returnDocument: 'after' }
             );
 
             const snapshotDocs = time.map((t, i) => ({
@@ -264,7 +286,7 @@ const seedAQI = async () => {
         const dataset = await Dataset.findOneAndUpdate(
             { name: `aqi-${city.name.toLowerCase()}` },
             { name: `aqi-${city.name.toLowerCase()}`, category: 'air_quality', source_api: 'open-meteo', location: `${city.name}, India`, unit: 'AQI', fetch_interval_minutes: 1 },
-            { upsert: true, new: true }
+            { upsert: true, returnDocument: 'after' }
         );
 
         let current = base;
@@ -312,18 +334,31 @@ const seedData = async (shouldExit = true) => {
     for (const col of cols) await db.collection(col.name).drop().catch(() => {});
     console.log('🗑️  Dropped all collections');
 
+    // Get USD-to-INR rates for crypto conversion
     const usdToInrTimeSeries = await seedForex();
-    await seedCrypto(usdToInrTimeSeries);
-    await seedWeather();
-    await seedAQI();
+
+    // Run Crypto, Weather, and AQI in parallel for speed
+    const results = await Promise.allSettled([
+        seedCrypto(usdToInrTimeSeries),
+        seedWeather(),
+        seedAQI()
+    ]);
+
+    // Handle results with graceful degradation
+    const seedNames = ['Crypto', 'Weather', 'AQI'];
+    results.forEach((result, index) => {
+        if (result.status === 'rejected') {
+            console.warn(`⚠️  ${seedNames[index]} seeding failed: ${result.reason.message}`);
+        }
+    });
 
     const [d, s, e] = await Promise.all([Dataset.countDocuments(), Snapshot.countDocuments(), Event.countDocuments()]);
     console.log(`\n🎉 Done!`);
     console.log(`   ${d} datasets | ${s} snapshots | ${e} events`);
-    console.log(`   📅 ${fmtDate(START_DATE)} → ${fmtDate(END_DATE)} (10 days real data)`);
+    console.log(`   📅 ${fmtDate(START_DATE)} → ${fmtDate(END_DATE)} (30 days real data)`);
     console.log(`   📈 Crypto: REAL (CoinGecko historical)`);
     console.log(`   🌡️  Weather: REAL (Open-Meteo Archive)`);
-    console.log(`   💱 Forex: REAL today rate + 10-day drift`);
+    console.log(`   💱 Forex: REAL today rate + 30-day drift`);
     console.log(`   🌫️  AQI: City-specific simulation (no free history API)`);
     if (shouldExit) process.exit();
 };

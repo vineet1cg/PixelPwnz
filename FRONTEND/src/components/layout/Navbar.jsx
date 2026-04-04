@@ -1,5 +1,7 @@
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
+import { useAuth } from '../../contexts/AuthContext'
+import { useState } from 'react'
 
 const PAGE_TITLES = {
   '/dashboard': { title: 'Dashboard', desc: 'Temporal insights at a glance' },
@@ -9,12 +11,29 @@ const PAGE_TITLES = {
 
 function Navbar() {
   const { pathname } = useLocation()
+  const navigate = useNavigate()
+  const { user, logout } = useAuth()
+  const [showUserMenu, setShowUserMenu] = useState(false)
 
   // Match dynamic dataset route
   const isDataset = pathname.startsWith('/dataset/')
   const page = isDataset
     ? { title: 'Dataset Detail', desc: 'Historical analysis & trends' }
     : PAGE_TITLES[pathname] ?? { title: 'DataTime Machine', desc: '' }
+
+  const handleLogout = () => {
+    logout()
+    navigate('/login')
+  }
+
+  const getInitials = (name) => {
+    if (!name) return '?'
+    return name
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+  }
 
   return (
     <header className="flex items-center justify-between border-b border-edge bg-bg-raised px-8 py-4">
@@ -57,18 +76,42 @@ function Navbar() {
           Live
         </div>
 
-        {/* User Avatar */}
-        <motion.div
-          whileHover={{ scale: 1.1 }}
-          transition={{ type: 'spring', stiffness: 400, damping: 15 }}
-          className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-xs font-bold text-bg-base"
-          style={{
-            background: 'linear-gradient(135deg, #f59e0b, #fb7185)',
-            boxShadow: '0 0 14px rgba(245,158,11,0.3)',
-          }}
-        >
-          R
-        </motion.div>
+        {/* User Menu */}
+        <div className="relative">
+          <motion.button
+            whileHover={{ scale: 1.1 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+            onClick={() => setShowUserMenu(!showUserMenu)}
+            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-xs font-bold text-bg-base transition-all"
+            style={{
+              background: 'linear-gradient(135deg, #f59e0b, #fb7185)',
+              boxShadow: '0 0 14px rgba(245,158,11,0.3)',
+            }}
+          >
+            {user ? getInitials(user.name) : 'R'}
+          </motion.button>
+
+          {/* Dropdown Menu */}
+          {showUserMenu && user && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              className="absolute right-0 mt-2 w-48 rounded-lg border border-edge bg-bg-raised shadow-lg py-1"
+            >
+              <div className="px-4 py-2 border-b border-edge">
+                <p className="text-sm font-semibold text-text-primary">{user.name}</p>
+                <p className="text-xs text-text-secondary">{user.email}</p>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="w-full text-left px-4 py-2 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+              >
+                Sign out
+              </button>
+            </motion.div>
+          )}
+        </div>
       </div>
     </header>
   )

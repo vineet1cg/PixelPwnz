@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'motion/react'
 import { api } from '../lib/api.js'
+import { useAuth } from '../contexts/AuthContext.jsx'
 import BeforeAfterChart from '../components/BeforeAfterChart.jsx'
 import Loader from '../components/ui/Loader.jsx'
 import { Button } from '../components/ui/button.jsx'
@@ -43,6 +44,7 @@ const pop = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transitio
 /* ══════════════════════════════════════════════════ */
 function EventLogPage() {
   const { simulatedTime } = useTimeMachine()
+  const { user } = useAuth()
   const [allEvents, setAllEvents] = useState([])
   const [datasets, setDatasets] = useState({})
   const [filter, setFilter] = useState('all')
@@ -52,6 +54,8 @@ function EventLogPage() {
   const [expanded, setExpanded] = useState(null)
   const [explanations, setExplanations] = useState({})
   const [loading, setLoading] = useState(true)
+  const [flagging, setFlagging] = useState(null) // Track which event is being flagged
+  const [requestingAI, setRequestingAI] = useState(null) // Track which event is requesting AI
 
   const datasetOptions = useMemo(() => Object.values(datasets), [datasets])
 
@@ -122,6 +126,42 @@ function EventLogPage() {
     } catch (error) {
       console.error('Failed to get explanation:', error)
       setExplanations(p => ({ ...p, [eventId]: 'Explanation unavailable' }))
+    }
+  }
+
+  // Flag/unflag an event
+  async function handleFlag(eventId, e) {
+    e.stopPropagation()
+    if (!user) return
+    setFlagging(eventId)
+    try {
+      // Toggle flag without requesting AI
+      await api.flagEvent(eventId, false)
+      // Refresh events to get updated flagged_count and user_flagged status
+      const updated = await api.getEvents()
+      setAllEvents(updated)
+    } catch (error) {
+      console.error('Failed to flag event:', error)
+    } finally {
+      setFlagging(null)
+    }
+  }
+
+  // Flag event and request AI analysis
+  async function handleFlagWithAI(eventId, e) {
+    e.stopPropagation()
+    if (!user) return
+    setRequestingAI(eventId)
+    try {
+      // Flag and request AI analysis
+      await api.flagEvent(eventId, true)
+      // Refresh events
+      const updated = await api.getEvents()
+      setAllEvents(updated)
+    } catch (error) {
+      console.error('Failed to flag event with AI:', error)
+    } finally {
+      setRequestingAI(null)
     }
   }
 
@@ -234,10 +274,11 @@ function EventLogPage() {
           <div className="grid grid-cols-12 gap-2 border-b border-edge px-5 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
             <span className="col-span-1">Severity</span>
             <span className="col-span-2">Type</span>
-            <span className="col-span-3">Dataset</span>
+            <span className="col-span-2">Dataset</span>
             <span className="col-span-2 text-right">Change</span>
             <span className="col-span-2">Time</span>
-            <span className="col-span-2 text-right">Values</span>
+            <span className="col-span-2">Flags</span>
+            <span className="col-span-1 text-right">Actions</span>
           </div>
 
           <AnimatePresence mode="popLayout">
@@ -267,13 +308,20 @@ function EventLogPage() {
                 >
                   {/* Main row */}
                   <div
-                    className="grid grid-cols-12 gap-2 px-5 py-3 cursor-pointer items-center text-sm"
+                    className="grid grid-cols-12 gap-2 px-5 py-3 cursor-pointer items-center text-sm transition-all"
+                    style={{
+                      background: ev.is_significant ? 'rgba(251,113,133,0.04)' : undefined,
+                      borderLeft: ev.is_significant ? `3px solid ${sev.color}` : 'none'
+                    }}
                     onClick={() => {
                       setExpanded(isExpanded ? null : ev._id)
                       if (!isExpanded) handleExplain(ev._id)
                     }}
                   >
                     <span className="col-span-1 flex items-center gap-2">
+                      {ev.is_significant && (
+                        <span className="text-lg" title="Significant Change">⭐</span>
+                      )}
                       <span className="h-2 w-2 rounded-full" style={{ background: sev.color, boxShadow: `0 0 6px ${sev.color}40` }} />
                       <span className="text-[10px] font-semibold" style={{ color: sev.color }}>{sev.label}</span>
                     </span>
@@ -281,7 +329,7 @@ function EventLogPage() {
                       <span className="text-sm">{TYPE_ICON[ev.type] || '•'}</span>
                       <span className="capitalize text-text-secondary">{ev.type}</span>
                     </span>
-                    <span className="col-span-3 flex items-center gap-2">
+                    <span className="col-span-2 flex items-center gap-2">
                       <span
                         className="rounded-full px-2 py-0.5 text-[10px] font-bold"
                         style={{ background: `${accent}14`, color: accent }}
@@ -296,8 +344,24 @@ function EventLogPage() {
                       {pctSign}{pctAbs}%
                     </span>
                     <span className="col-span-2 text-xs text-text-muted">{formatDate(ev.timestamp)}</span>
-                    <span className="col-span-2 text-right font-mono text-[11px] text-text-secondary">
-                      {ev.previous_value != null ? `${ev.previous_value} → ${ev.current_value}` : `${ev.current_value}`}
+                    <span className="col-span-2 flex items-center gap-2">
+                      {ev.flagged_count > 0 && (
+                        <span className="flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded bg-amber-500/10 text-amber-600">
+                          🚩 {ev.flagged_count}
+                        </span>
+                      )}
+                    </span>
+                    <span className="col-span-1 flex justify-end">
+                      {user && (
+                        <button
+                          onClick={(e) => handleFlag(ev._id, e)}
+                          disabled={flagging === ev._id}
+                          className="text-sm transition-all disabled:opacity-50"
+                          title="Flag this event"
+                        >
+                          {flagging === ev._id ? '⏳' : '🚩'}
+                        </button>
+                      )}
                     </span>
                   </div>
 
@@ -336,24 +400,84 @@ function EventLogPage() {
                             <BeforeAfterChart datasetId={ev.dataset_id} eventTime={ev.timestamp} color={sev.color} />
                           </div>
 
-                          {/* AI Explanation */}
-                          <div className="card-flat px-3 py-2">
-                            <span className="text-[10px] uppercase text-text-muted">AI Analysis</span>
-                            <div className="mt-1 text-xs text-text-secondary">
-                              {explanations[ev._id] === 'Loading…' && (
-                                <div className="flex items-center gap-2">
-                                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                                  <span>Analyzing event patterns...</span>
-                                </div>
-                              )}
-                              {explanations[ev._id] && explanations[ev._id] !== 'Loading…' && (
-                                <p>{explanations[ev._id]}</p>
-                              )}
-                              {!explanations[ev._id] && (
-                                <p>Click to load explanation…</p>
+                          {/* AI Insights for Significant Changes */}
+                          {ev.is_significant && (ev.ai_reason || ev.ai_action || ev.ai_impact) && (
+                            <div className="mt-3 border-t border-edge-subtle pt-3">
+                              <span className="flex items-center gap-2 text-[10px] uppercase text-text-muted font-semibold">
+                                <span>⚡</span> Significant Change Analysis
+                              </span>
+                              <div className="mt-3 grid grid-cols-1 gap-3">
+                                {/* Reason */}
+                                {ev.ai_reason && (
+                                  <div className="card-flat px-3 py-2.5 border-l-2" style={{ borderColor: sev.color }}>
+                                    <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: sev.color }}>Why it happened</p>
+                                    <p className="mt-1 text-xs text-text-secondary leading-relaxed">{ev.ai_reason}</p>
+                                  </div>
+                                )}
+                                {/* Action */}
+                                {ev.ai_action && (
+                                  <div className="card-flat px-3 py-2.5 border-l-2" style={{ borderColor: '#f59e0b' }}>
+                                    <p className="text-[10px] font-bold uppercase tracking-wider text-amber-500">What to do</p>
+                                    <p className="mt-1 text-xs text-text-secondary leading-relaxed">{ev.ai_action}</p>
+                                  </div>
+                                )}
+                                {/* Impact */}
+                                {ev.ai_impact && (
+                                  <div className="card-flat px-3 py-2.5 border-l-2" style={{ borderColor: '#38bdf8' }}>
+                                    <p className="text-[10px] font-bold uppercase tracking-wider text-sky-500">Future impact</p>
+                                    <p className="mt-1 text-xs text-text-secondary leading-relaxed">{ev.ai_impact}</p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Flag options for user */}
+                          {user && (
+                            <div className="mt-3 border-t border-edge-subtle pt-3 flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(e) => handleFlag(ev._id, e)}
+                                disabled={flagging === ev._id}
+                                className="flex items-center gap-2"
+                              >
+                                🚩 {flagging === ev._id ? 'Flagging...' : 'Flag Event'}
+                              </Button>
+                              {!ev.is_significant && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={(e) => handleFlagWithAI(ev._id, e)}
+                                  disabled={requestingAI === ev._id}
+                                  className="flex items-center gap-2"
+                                >
+                                  ⚡ {requestingAI === ev._id ? 'Analyzing...' : 'Flag & Analyze'}
+                                </Button>
                               )}
                             </div>
-                          </div>
+                          )}
+
+                          {/* Legacy AI Explanation (for non-significant changes) */}
+                          {!ev.is_significant && (
+                            <div className="card-flat px-3 py-2">
+                              <span className="text-[10px] uppercase text-text-muted">AI Analysis</span>
+                              <div className="mt-1 text-xs text-text-secondary">
+                                {explanations[ev._id] === 'Loading…' && (
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                                    <span>Analyzing event patterns...</span>
+                                  </div>
+                                )}
+                                {explanations[ev._id] && explanations[ev._id] !== 'Loading…' && (
+                                  <p>{explanations[ev._id]}</p>
+                                )}
+                                {!explanations[ev._id] && (
+                                  <p>Click to load explanation…</p>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </motion.div>
                     )}

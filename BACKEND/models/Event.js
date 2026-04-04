@@ -8,10 +8,19 @@ const eventSchema = new mongoose.Schema({
     current_value: { type: Number, required: true },
     timestamp: { type: Date, required: true, default: Date.now },
     message: { type: String, required: true },
-    severity: { type: String, required: true, enum: ['low', 'medium', 'high'] }
+    severity: { type: String, required: true, enum: ['low', 'medium', 'high'] },
+    // AI-generated insights for significant changes
+    is_significant: { type: Boolean, default: false },
+    ai_reason: { type: String, default: null },
+    ai_action: { type: String, default: null },
+    ai_impact: { type: String, default: null },
+    flagged_by: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    flagged_count: { type: Number, default: 0 }
 });
 
 eventSchema.index({ dataset_id: 1, timestamp: -1 });
 eventSchema.index({ timestamp: -1 });
+eventSchema.index({ is_significant: 1 });
+eventSchema.index({ flagged_by: 1 });
 
 module.exports = mongoose.model('Event', eventSchema);

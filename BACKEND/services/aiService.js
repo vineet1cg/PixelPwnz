@@ -1,9 +1,107 @@
 const axios = require('axios');
 const Dataset = require('../models/Dataset');
 
+// Determine if a change is significant based on severity and threshold
+const isSignificantChange = (severity, percentageChange) => {
+    return severity === 'high' || (severity === 'medium' && Math.abs(percentageChange) > 15);
+};
+
+// Enhanced function for comprehensive event analysis with 3-part breakdown
+const generateComprehensiveExplanation = async (event) => {
+    try {
+        const dataset = await Dataset.findById(event.dataset_id);
+        const context = dataset ? 
+            `${dataset.name} (${dataset.category}) located in ${dataset.location}. The unit of measurement is ${dataset.unit}. ` : 
+            'Unknown Dataset. ';
+
+        const prompt = `You are a data analyst for the "DataTime Machine" platform, specializing in time-series anomaly analysis.
+
+Context: ${context}
+Event Date/Time: ${new Date(event.timestamp).toLocaleString()}
+Event Type: ${event.type} (Severity: ${event.severity})
+Change: The value changed by ${event.percentage_change.toFixed(2)}%, moving from ${event.previous_value} to ${event.current_value}.
+
+Please provide a structured JSON response with EXACTLY these three fields (no additional fields):
+1. "reason": A 1-2 sentence explanation of what likely caused this specific change. Be factual and plausible.
+2. "action": A 1-2 sentence recommendation on what action should be taken in response to this event.
+3. "impact": A 1-2 sentence explanation of potential future impacts or implications if this trend continues.
+
+IMPORTANT: Respond ONLY with valid JSON in this exact format, no markdown, no extra text:
+{"reason": "...", "action": "...", "impact": "..."}`;
+
+        let response = null;
+
+        // Try Groq API first (fastest)
+        if (process.env.GROQ_API_KEY) {
+            try {
+                const groqResponse = await axios.post(
+                    'https://api.groq.com/openai/v1/chat/completions',
+                    {
+                        model: 'llama-3.1-8b-instant',
+                        messages: [
+                            { role: 'user', content: prompt }
+                        ],
+                        temperature: 0.7,
+                        max_tokens: 300
+                    },
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+                            'Content-Type': 'application/json'
+                        },
+                        timeout: 10000
+                    }
+                );
+                response = groqResponse.data.choices[0].message.content;
+            } catch (grErr) {
+                console.log('Groq API failed, falling back to Pollinations:', grErr.message);
+            }
+        }
+
+        // Fallback: Pollinations API (free, no key)
+        if (!response) {
+            const pollResponse = await axios.post(
+                'https://text.pollinations.ai/',
+                {
+                    messages: [
+                        { role: 'user', content: prompt }
+                    ]
+                },
+                { timeout: 15000 }
+            );
+            response = pollResponse.data;
+        }
+
+        // Parse the JSON response
+        try {
+            const parsed = JSON.parse(response);
+            if (parsed.reason && parsed.action && parsed.impact) {
+                return parsed;
+            }
+        } catch (parseErr) {
+            // If parsing fails, return a safe default
+            console.warn('Failed to parse AI response as JSON:', response.substring(0, 100));
+        }
+
+        // Fallback response structure
+        return {
+            reason: 'Unable to generate analysis at this time.',
+            action: 'Please review the data manually for context.',
+            impact: 'Monitor this metric for further changes.'
+        };
+    } catch (error) {
+        console.error('AI Service Error:', error.message);
+        return {
+            reason: `Analysis failed: ${error.message}`,
+            action: 'Retry or review manually.',
+            impact: 'Data integrity maintained despite analysis failure.'
+        };
+    }
+};
+
+// Legacy function for backward compatibility
 const generateEventExplanation = async (event) => {
     try {
-        // Retrieve the dataset to provide context to the AI
         const dataset = await Dataset.findById(event.dataset_id);
         
         const context = dataset ? 
@@ -18,7 +116,6 @@ Details: The value changed by ${event.percentage_change.toFixed(2)}%, moving fro
 
 Please provide a concise (2-3 sentences), plausible, and factual explanation of what could have caused this particular fluctuation. Make it sound professional but easy to understand. Do not mention that you are an AI.`;
 
-        // If a Groq API Key is provided in the .env, use that over REST (extremely fast, no extra npm packages needed)
         if (process.env.GROQ_API_KEY) {
             const groqResponse = await axios.post(
                 'https://api.groq.com/openai/v1/chat/completions',
@@ -38,7 +135,6 @@ Please provide a concise (2-3 sentences), plausible, and factual explanation of 
             return groqResponse.data.choices[0].message.content;
         }
 
-        // Fallback: Using free open source endpoint (no API key required)
         const response = await axios.post('https://text.pollinations.ai/', {
             messages: [
                 { role: 'system', content: 'You are a professional data analyst.' },
@@ -53,4 +149,4 @@ Please provide a concise (2-3 sentences), plausible, and factual explanation of 
     }
 };
 
-module.exports = { generateEventExplanation };
+module.exports = { generateEventExplanation, generateComprehensiveExplanation, isSignificantChange };

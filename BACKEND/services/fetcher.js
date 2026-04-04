@@ -100,25 +100,25 @@ const saveSnapshot = async (datasetName, category, sourceApi, location, unit, va
 // ═══════════════════════════════════════════
 // 📈 CRYPTO — CoinGecko (no key needed)
 // Free tier: ~30 calls/min → 1 batch call every 10 min = safe
-// canonical value = USD; INR rate stored in metadata for frontend conversion
+// Store in INR for consistency
 // ═══════════════════════════════════════════
 const fetchAllCrypto = async () => {
     try {
         const ids = CRYPTOS.map(c => c.id).join(',');
-        // CoinGecko returns both USD and INR natively — use that as ground truth
+        // CoinGecko returns both USD and INR natively — use INR as value
         const response = await axios.get(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd,inr`);
 
         for (const crypto of CRYPTOS) {
             const priceUSD = response.data[crypto.id]?.usd;
             const priceINR = response.data[crypto.id]?.inr;
-            if (priceUSD !== undefined) {
+            if (priceINR !== undefined) {
                 const usdToInr = priceINR && priceUSD ? parseFloat((priceINR / priceUSD).toFixed(4)) : null;
                 await saveSnapshot(
-                    `crypto-${crypto.id}`, 'crypto', 'coingecko', 'global', 'USD',
-                    priceUSD,   // ← canonical USD value; frontend converts with metadata.usd_to_inr
-                    { symbol: crypto.symbol, usd: priceUSD, inr: priceINR, usd_to_inr: usdToInr, inr_value: priceINR }
+                    `crypto-${crypto.id}`, 'crypto', 'coingecko', 'global', 'INR',
+                    priceINR,   // ← Store INR value
+                    { symbol: crypto.symbol, usd: priceUSD, inr: priceINR, usd_to_inr: usdToInr }
                 );
-                console.log(`  ✅ ${crypto.name}: $${priceUSD} (₹${priceINR})`);
+                console.log(`  ✅ ${crypto.name}: ₹${priceINR} ($${priceUSD})`);
             }
         }
     } catch (error) {
@@ -186,6 +186,7 @@ const fetchAllWeather = async () => {
 // ═══════════════════════════════════════════
 // 💱 FOREX — ExchangeRate API (no key, INR base)
 // Free tier: Updates once/day → fetch every 60 min is plenty
+// Store as "1 foreign currency = X INR"
 // ═══════════════════════════════════════════
 const fetchAllForex = async () => {
     try {
@@ -193,12 +194,14 @@ const fetchAllForex = async () => {
         for (const pair of FOREX_PAIRS) {
             const rate = response.data.rates[pair.code];
             if (rate !== undefined) {
-                // Store as "1 INR = X foreign currency"
+                // rate is 1 INR = rate foreign
+                // We want 1 foreign = 1/rate INR
+                const inrValue = parseFloat((1 / rate).toFixed(4));
                 await saveSnapshot(
-                    `forex-inr-${pair.code.toLowerCase()}`, 'forex', 'exchangerate', 'India', pair.code,
-                    rate, { base: 'INR', target: pair.code, time_last_update: response.data.time_last_update_utc }
+                    `forex-${pair.code.toLowerCase()}-inr`, 'forex', 'exchangerate', 'India', 'INR',
+                    inrValue, { base: pair.code, target: 'INR', original_rate: rate, time_last_update: response.data.time_last_update_utc }
                 );
-                console.log(`  ✅ 1 INR = ${rate} ${pair.code}`);
+                console.log(`  ✅ 1 ${pair.code} = ₹${inrValue}`);
             }
         }
     } catch (error) {
@@ -236,14 +239,14 @@ const fetchSingleDataset = async (datasetName) => {
         const priceUSD = response.data[cryptoMatch.id]?.usd;
         const priceINR = response.data[cryptoMatch.id]?.inr;
         
-        if (priceUSD !== undefined) {
+        if (priceINR !== undefined) {
             const usdToInr = priceINR && priceUSD ? parseFloat((priceINR / priceUSD).toFixed(4)) : null;
             await saveSnapshot(
-                `crypto-${cryptoMatch.id}`, 'crypto', 'coingecko', 'global', 'USD',
-                priceUSD,   // ← Store USD as canonical value
-                { symbol: cryptoMatch.symbol, usd: priceUSD, inr: priceINR, usd_to_inr: usdToInr, inr_value: priceINR }
+                `crypto-${cryptoMatch.id}`, 'crypto', 'coingecko', 'global', 'INR',
+                priceINR,   // ← Store INR value
+                { symbol: cryptoMatch.symbol, usd: priceUSD, inr: priceINR, usd_to_inr: usdToInr }
             );
-            console.log(`  ✅ ${cryptoMatch.name}: $${priceUSD} (₹${priceINR})`);
+            console.log(`  ✅ ${cryptoMatch.name}: ₹${priceINR} ($${priceUSD})`);
         }
         return true;
     }
@@ -268,11 +271,14 @@ const fetchSingleDataset = async (datasetName) => {
         return true;
     }
 
-    const forexMatch = FOREX_PAIRS.find(p => `forex-inr-${p.code.toLowerCase()}` === datasetName);
+    const forexMatch = FOREX_PAIRS.find(p => `forex-${p.code.toLowerCase()}-inr` === datasetName);
     if (forexMatch) {
         const response = await axios.get('https://open.er-api.com/v6/latest/INR');
         const rate = response.data.rates[forexMatch.code];
-        if (rate) await saveSnapshot(`forex-inr-${forexMatch.code.toLowerCase()}`, 'forex', 'exchangerate', 'India', forexMatch.code, rate, { base: 'INR', target: forexMatch.code });
+        if (rate) {
+            const inrValue = parseFloat((1 / rate).toFixed(4));
+            await saveSnapshot(`forex-${forexMatch.code.toLowerCase()}-inr`, 'forex', 'exchangerate', 'India', 'INR', inrValue, { base: forexMatch.code, target: 'INR', original_rate: rate });
+        }
         return true;
     }
 
