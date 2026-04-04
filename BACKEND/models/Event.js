@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const eventSchema = new mongoose.Schema({
     dataset_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Dataset', required: true },
-    type: { type: String, required: true, enum: ['spike', 'drop', 'anomaly'] },
+    type: { type: String, required: true, enum: ['spike', 'drop', 'anomaly', 'prediction'] },
     percentage_change: { type: Number, required: true },
     previous_value: { type: Number, required: true },
     current_value: { type: Number, required: true },
@@ -14,6 +14,8 @@ const eventSchema = new mongoose.Schema({
     ai_reason: { type: String, default: null },
     ai_action: { type: String, default: null },
     ai_impact: { type: String, default: null },
+    ai_confidence: { type: Number, min: 0, max: 100, default: null },
+    target_timestamp: { type: Date, default: null },
     flagged_by: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     flagged_count: { type: Number, default: 0 },
     flag_notes: [{

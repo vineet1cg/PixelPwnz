@@ -1,5 +1,6 @@
 const express = require('express');
 const Snapshot = require('../models/Snapshot');
+const { runForecastCycle } = require('../services/forecaster');
 
 const router = express.Router();
 
@@ -34,6 +35,20 @@ router.get('/time-bounds', async (req, res) => {
             maxTimestamp: maxTimestamp.toISOString(),
             count,
         });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * POST /api/meta/trigger-forecast
+ * Manually starts the AI forecasting loop
+ */
+router.post('/trigger-forecast', async (req, res) => {
+    try {
+        // Run asynchronously so we don't block the request entirely
+        runForecastCycle().catch((err) => console.error('Manual forecast failed:', err));
+        res.json({ message: 'Forecast cycle triggered and running in the background!' });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }

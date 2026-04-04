@@ -51,6 +51,7 @@ export const api = {
   // Metadata
   // ====================
   getTimeBounds: () => request('/meta/time-bounds'),
+  triggerForecast: () => fetch(`${API}/meta/trigger-forecast`, { method: 'POST' }).then(r => r.json()),
 
   // ====================
   // Datasets

@@ -30,6 +30,7 @@ const TYPE_ICON = {
   drop:    '↓',
   anomaly: '⚡',
   update:  '⟳',
+  prediction: '🔮',
 }
 
 /* ── Helpers ──────────────────────────────────────── */
@@ -188,7 +189,14 @@ function EventLogPage() {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-0">
 
       {/* ── Toolbar (title in Navbar) ───────────────────── */}
-      <header className="flex items-center justify-end border-b border-edge px-8 py-4">
+      <header className="flex items-center justify-end border-b border-edge px-8 py-4 gap-3">
+        {user && (
+          <Button variant="outline" size="sm" onClick={() => {
+              api.triggerForecast().then(() => alert('AI Forecast cycle triggered and running securely in the background!'))
+          }} className="text-purple-400 border-purple-500/20 hover:text-purple-300 hover:border-purple-500/50 bg-purple-500/5 hover:bg-purple-500/10 transition-colors hidden md:flex">
+            <span className="mr-2">🔮</span> Run AI Forecast
+          </Button>
+        )}
         <Button variant="outline" size="sm" asChild>
           <Link to="/dashboard">← Dashboard</Link>
         </Button>
@@ -348,14 +356,25 @@ function EventLogPage() {
                     >
                       {pctSign}{pctAbs}%
                     </span>
-                    <span className="col-span-2 text-xs text-text-muted">{formatDate(ev.timestamp)}</span>
+                    <span className="col-span-2 text-xs text-text-muted">
+                      {ev.type === 'prediction' && ev.target_timestamp ? (
+                        <span className="text-purple-400/90 font-medium whitespace-nowrap" title="Estimated Arrival Time">Est: {formatDate(ev.target_timestamp)}</span>
+                      ) : (
+                        formatDate(ev.timestamp)
+                      )}
+                    </span>
                     <span className="col-span-2 flex items-center gap-2">
+                      {ev.type === 'prediction' && ev.ai_confidence && (
+                        <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20" title={`AI Confidence`}>
+                          {ev.ai_confidence}% CONF
+                        </span>
+                      )}
                       {ev.flagged_count > 0 && (
                         <span className="flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded bg-amber-500/10 text-amber-600" title={`${ev.flagged_count} user flags`}>
                           🚩 {ev.flagged_count}
                         </span>
                       )}
-                      {(ev.ai_reason || ev.ai_action || ev.ai_impact) && (
+                      {ev.type !== 'prediction' && (ev.ai_reason || ev.ai_action || ev.ai_impact) && (
                         <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-emerald-500/10 text-emerald-400" title="Analyzed by AI Context Engine">
                           ⚡ AI
                         </span>

@@ -149,4 +149,85 @@ Please provide a concise (2-3 sentences), plausible, and factual explanation of 
     }
 };
 
-module.exports = { generateEventExplanation, generateComprehensiveExplanation, isSignificantChange };
+// Predictive Analytics Pipeline
+const generatePredictiveForecast = async (dataset, snapshots) => {
+    try {
+        // take last 24 items if there are too many
+        const recentSnapshots = snapshots.slice(-24);
+        const historyData = recentSnapshots.map(s => `${new Date(s.timestamp).toLocaleTimeString()}: ${s.value}`).join('\n');
+        
+        const context = dataset ? 
+            `${dataset.name} (${dataset.category}) located in ${dataset.location}. Unit: ${dataset.unit}.` : 
+            'Unknown Dataset.';
+
+        const prompt = `You are a strict data scientist algorithmic forecaster.
+Analyze the following recent temporal data points for anomalies and predict if a massive sudden event (drop or spike > 10%) is about to occur within the next 24 hours.
+
+Context: ${context}
+Recent History:
+${historyData}
+
+Return a single JSON object with EXACTLY these fields (No markdown, no explanation, just raw JSON):
+{
+  "has_prediction": true,
+  "type": "spike",
+  "confidence_level": 85,
+  "estimated_percentage_change": 15.5,
+  "reasoning": "Based on the sharp acceleration in the last 3 hours, a continuing trend suggests a breakout constraint...",
+  "hours_until_occurrence": 6
+}
+If you do NOT predict an event, return {"has_prediction": false, "confidence_level": 0}`;
+
+        let response = null;
+
+        if (process.env.GROQ_API_KEY) {
+            try {
+                const groqResponse = await axios.post(
+                    'https://api.groq.com/openai/v1/chat/completions',
+                    {
+                        model: 'llama-3.1-8b-instant',
+                        response_format: { type: "json_object" },
+                        messages: [
+                            { role: 'user', content: prompt }
+                        ],
+                        temperature: 0.3
+                    },
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+                            'Content-Type': 'application/json'
+                        },
+                        timeout: 15000
+                    }
+                );
+                response = groqResponse.data.choices[0].message.content;
+            } catch (gErr) {
+                console.log('Groq Forecasting API failed, falling back to Pollinations:', gErr.message);
+            }
+        }
+        
+        if (!response) {
+            const pxResponse = await axios.post('https://text.pollinations.ai/', {
+                jsonMode: true,
+                messages: [
+                    { role: 'system', content: 'You are an algorithmic forecaster. Output strict JSON only without any markdown formatting.' },
+                    { role: 'user', content: prompt }
+                ]
+            });
+            response = pxResponse.data;
+        }
+
+        try {
+            const jsonStr = String(response).replace(/```json/g, '').replace(/```/g, '').trim();
+            return JSON.parse(jsonStr);
+        } catch (parseErr) {
+            console.error('Failed to parse AI forecast JSON:', response);
+            return { has_prediction: false, confidence_level: 0 };
+        }
+    } catch (error) {
+        console.error('Forecast Service Error:', error.message);
+        return { has_prediction: false, confidence_level: 0 };
+    }
+};
+
+module.exports = { generateEventExplanation, generateComprehensiveExplanation, isSignificantChange, generatePredictiveForecast };

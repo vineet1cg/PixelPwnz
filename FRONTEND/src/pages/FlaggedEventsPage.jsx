@@ -121,17 +121,25 @@ export default function FlaggedEventsPage() {
                   </span>
                   <span className="col-span-3 flex items-center gap-2 text-text-primary font-medium">
                     <span className="truncate">{ds?.name || 'Unknown'}</span>
-                    {(ev.ai_reason || ev.ai_action || ev.ai_impact) && (
+                    {ev.type === 'prediction' ? (
+                      <span className="flex items-center gap-1 shrink-0 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20" title={`AI Confidence`}>
+                        🔮 {ev.ai_confidence}% CONF
+                      </span>
+                    ) : (ev.ai_reason || ev.ai_action || ev.ai_impact) ? (
                       <span className="flex items-center gap-1 shrink-0 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400" title="Analyzed by AI Context Engine">
                         ⚡ AI
                       </span>
-                    )}
+                    ) : null}
                   </span>
                   <span className="col-span-2 font-mono" style={{ color: ev.percentage_change >= 0 ? '#34d399' : '#fb7185' }}>
                     {ev.percentage_change >= 0 ? '+' : ''}{ev.percentage_change}%
                   </span>
                   <span className="col-span-2 text-xs text-text-muted">
-                    {new Date(ev.timestamp).toLocaleDateString()}
+                    {ev.type === 'prediction' && ev.target_timestamp ? (
+                      <span className="text-purple-400/90 font-medium whitespace-nowrap" title="Estimated Arrival Time">Est: {new Date(ev.target_timestamp).toLocaleDateString()}</span>
+                    ) : (
+                      new Date(ev.timestamp).toLocaleDateString()
+                    )}
                   </span>
                   <span className="col-span-3 flex justify-end">
                     <Button variant="ghost" size="sm" onClick={(e) => handleRemoveFlag(ev._id, e)} className="text-text-muted hover:text-rose-500">
